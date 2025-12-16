@@ -71,10 +71,13 @@ const TenantList: React.FC = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <div className="flex items-center gap-2">
-                    <Filter className="text-slate-400" size={20} />
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3">
+                    <div className="flex items-center gap-1 text-slate-500 font-medium">
+                        <Filter size={16} />
+                        <span>Filter:</span>
+                    </div>
                     <select 
-                        className="border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                        className="bg-transparent py-2 focus:outline-none text-slate-700"
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value)}
                     >

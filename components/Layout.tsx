@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Users, Home, Settings, MessageSquareText, Menu, X, PlusCircle } from 'lucide-react';
+import { LayoutDashboard, Users, Home, Settings, MessageSquareText, Menu, X, DollarSign } from 'lucide-react';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -12,6 +12,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeView }) 
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'finance', label: 'Finance & Payments', icon: DollarSign },
         { id: 'tenants', label: 'Tenants & Contracts', icon: Users },
         { id: 'rooms', label: 'Buildings & Rooms', icon: Home },
         { id: 'ai-assistant', label: 'AI Assistant', icon: MessageSquareText },

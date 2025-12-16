@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { getDashboardStats, getBuildings } from '../services/propertyService';
-import { Users, AlertCircle, DollarSign, Home } from 'lucide-react';
+import { Users, AlertCircle, DollarSign, Home, Wallet, TrendingUp, Settings } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-    const stats = getDashboardStats();
+    const [expiryDays, setExpiryDays] = useState(60);
+    const stats = getDashboardStats(expiryDays);
     const buildings = getBuildings();
 
     // Mock data for occupancy chart
@@ -16,40 +17,63 @@ const Dashboard: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <header className="mb-8">
-                <h2 className="text-2xl font-bold text-slate-800">Overview</h2>
-                <p className="text-slate-500">Welcome back. Here's what's happening in your properties.</p>
+            <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Overview</h2>
+                    <p className="text-slate-500">Welcome back. Here's what's happening in your properties.</p>
+                </div>
+                <div className="flex flex-col items-end">
+                    <p className="text-sm text-slate-500 font-medium uppercase">Annual Net Operating Income</p>
+                    <p className="text-3xl font-bold text-brand-600">NT$ {stats.annualNetProfit.toLocaleString()}</p>
+                </div>
             </header>
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard 
-                    title="Total Revenue (Est.)" 
+                    title="Monthly Revenue" 
                     value={`NT$ ${stats.monthlyRevenue.toLocaleString()}`} 
-                    subtext="Monthly"
+                    subtext="Collected this month"
                     icon={<DollarSign className="text-emerald-500" />}
                     bgColor="bg-emerald-50"
                 />
                 <StatCard 
-                    title="Occupancy Rate" 
+                    title="Unpaid / Overdue" 
+                    value={stats.overdueCount.toString()} 
+                    subtext="Pending Actions"
+                    icon={<AlertCircle className="text-red-500" />}
+                    bgColor="bg-red-50"
+                />
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between hover:shadow-md transition-shadow relative">
+                    <div className="flex items-start justify-between">
+                         <div>
+                            <p className="text-sm font-medium text-slate-500 mb-1">Expiring Soon</p>
+                            <h3 className="text-2xl font-bold text-slate-900">{stats.expiringSoon}</h3>
+                            <p className="text-xs text-slate-400 mt-1">Contracts ending</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-amber-50">
+                            <TrendingUp className="text-amber-500" />
+                        </div>
+                    </div>
+                    <div className="mt-4 flex items-center gap-2 text-sm border-t border-slate-100 pt-2">
+                        <span className="text-slate-400">Within</span>
+                        <select 
+                            className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-slate-700 outline-none text-xs"
+                            value={expiryDays}
+                            onChange={(e) => setExpiryDays(Number(e.target.value))}
+                        >
+                            <option value="30">30 Days</option>
+                            <option value="60">60 Days</option>
+                            <option value="90">90 Days</option>
+                        </select>
+                    </div>
+                </div>
+                <StatCard 
+                    title="Occupancy" 
                     value={`${stats.occupancyRate}%`} 
                     subtext={`${stats.occupied} / ${stats.totalRooms} Rooms`}
                     icon={<Users className="text-blue-500" />}
                     bgColor="bg-blue-50"
-                />
-                <StatCard 
-                    title="Expiring Contracts" 
-                    value={stats.expiringSoon.toString()} 
-                    subtext="Next 60 Days"
-                    icon={<AlertCircle className="text-amber-500" />}
-                    bgColor="bg-amber-50"
-                />
-                 <StatCard 
-                    title="Properties" 
-                    value={buildings.length.toString()} 
-                    subtext="Total Buildings"
-                    icon={<Home className="text-purple-500" />}
-                    bgColor="bg-purple-50"
                 />
             </div>
 
@@ -79,20 +103,37 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-                    <div className="space-y-3">
-                        <button className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-brand-500 hover:bg-brand-50 transition-colors flex items-center justify-between group">
-                            <span className="font-medium text-slate-700 group-hover:text-brand-700">Add New Tenant</span>
-                            <PlusCircle size={18} className="text-slate-400 group-hover:text-brand-500" />
-                        </button>
-                        <button className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-brand-500 hover:bg-brand-50 transition-colors flex items-center justify-between group">
-                            <span className="font-medium text-slate-700 group-hover:text-brand-700">Record Payment</span>
-                            <DollarSign size={18} className="text-slate-400 group-hover:text-brand-500" />
-                        </button>
-                        <button className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-brand-500 hover:bg-brand-50 transition-colors flex items-center justify-between group">
-                            <span className="font-medium text-slate-700 group-hover:text-brand-700">Maintenance Req</span>
-                            <AlertCircle size={18} className="text-slate-400 group-hover:text-brand-500" />
-                        </button>
+                    <h3 className="text-lg font-semibold mb-4">Quick Insights</h3>
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-green-100 rounded text-green-600">
+                                    <DollarSign size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 font-bold uppercase">YTD Revenue</p>
+                                    <p className="font-bold text-slate-800">NT$ {stats.monthlyRevenue.toLocaleString()}</p>
+                                </div>
+                            </div>
+                        </div>
+                         <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-red-100 rounded text-red-600">
+                                    <Wallet size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 font-bold uppercase">YTD Expenses</p>
+                                    <p className="font-bold text-slate-800">NT$ {(stats.monthlyRevenue - stats.annualNetProfit).toLocaleString()}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="pt-4 border-t border-slate-100">
+                             <div className="flex justify-between text-sm mb-2">
+                                <span className="text-slate-500">Available Rooms</span>
+                                <span className="font-bold text-slate-800">{stats.totalRooms - stats.occupied}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -112,7 +153,5 @@ const StatCard = ({ title, value, subtext, icon, bgColor }: any) => (
         </div>
     </div>
 );
-
-import { PlusCircle } from 'lucide-react';
 
 export default Dashboard;

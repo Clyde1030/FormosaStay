@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut } from 'lucide-react';
+import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save } from 'lucide-react';
 import { TenantWithContract, ContractStatus, PaymentFrequency, DepositStatus, Contract } from '../types';
-import { calculateProration, terminateContract, createContract } from '../services/propertyService';
+import { calculateProration, terminateContract, createContract, updateTenant, updateContract } from '../services/propertyService';
 
 interface Props {
     tenant: TenantWithContract;
@@ -10,6 +10,13 @@ interface Props {
 
 const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     const [view, setView] = useState<'details' | 'terminate' | 'renew'>('details');
+    const [isEditing, setIsEditing] = useState(false);
+    
+    // Edit Form State
+    const [editTenant, setEditTenant] = useState({ ...tenant });
+    const [editContract, setEditContract] = useState(tenant.currentContract ? { ...tenant.currentContract } : null);
+
+    // Termination State
     const [terminationDate, setTerminationDate] = useState('');
     const [terminationReason, setTerminationReason] = useState('');
     const [prorationAmount, setProrationAmount] = useState<number | null>(null);
@@ -49,6 +56,21 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
         onClose();
     };
 
+    const handleSaveEdits = () => {
+        updateTenant(tenant.id, editTenant);
+        if (tenant.currentContract && editContract) {
+            updateContract(tenant.currentContract.id, editContract);
+        }
+        setIsEditing(false);
+        // We'd ideally refresh the parent data here, but closing will force refresh on re-open in this prototype architecture
+        onClose(); 
+    };
+
+    const handlePrint = () => {
+        alert("Generating PDF Contract... (Feature stub)");
+        // window.print(); // In real app, this would open a formatted print window
+    };
+
     if (!tenant) return null;
 
     return (
@@ -57,10 +79,27 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                 {/* Header */}
                 <div className="p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50">
                     <div>
-                        <h2 className="text-2xl font-bold text-slate-800">{tenant.name}</h2>
+                        {isEditing ? (
+                             <input 
+                                className="text-2xl font-bold text-slate-800 border-b border-slate-300 bg-transparent mb-2" 
+                                value={editTenant.name}
+                                onChange={e => setEditTenant({...editTenant, name: e.target.value})}
+                            />
+                        ) : (
+                            <h2 className="text-2xl font-bold text-slate-800">{tenant.name}</h2>
+                        )}
                         <div className="flex items-center gap-3 mt-2 text-sm text-slate-600">
-                            <span className="flex items-center gap-1"><Phone size={14}/> {tenant.phoneNumber}</span>
-                            {tenant.lineId && <span className="flex items-center gap-1 text-green-600 font-medium"><MessageCircle size={14}/> {tenant.lineId}</span>}
+                            {isEditing ? (
+                                <>
+                                    <input className="border rounded px-2 py-1" value={editTenant.phoneNumber} onChange={e => setEditTenant({...editTenant, phoneNumber: e.target.value})} />
+                                    <input className="border rounded px-2 py-1" value={editTenant.lineId || ''} placeholder="Line ID" onChange={e => setEditTenant({...editTenant, lineId: e.target.value})} />
+                                </>
+                            ) : (
+                                <>
+                                    <span className="flex items-center gap-1"><Phone size={14}/> {tenant.phoneNumber}</span>
+                                    {tenant.lineId && <span className="flex items-center gap-1 text-green-600 font-medium"><MessageCircle size={14}/> {tenant.lineId}</span>}
+                                </>
+                            )}
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
@@ -72,6 +111,18 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                     {/* View: Details */}
                     {view === 'details' && (
                         <>
+                            <div className="flex justify-end gap-2 mb-2">
+                                {isEditing ? (
+                                     <button onClick={handleSaveEdits} className="flex items-center gap-2 bg-brand-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-brand-700">
+                                        <Save size={16} /> Save Changes
+                                     </button>
+                                ) : (
+                                    <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 text-slate-600">
+                                        <Edit size={16} /> Edit Profile
+                                    </button>
+                                )}
+                            </div>
+
                             {/* Personal Info */}
                             <section>
                                 <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
@@ -80,19 +131,35 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                 <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                                     <div>
                                         <label className="text-xs text-slate-500 uppercase font-bold">ID Number</label>
-                                        <p className="text-slate-800">{tenant.idNumber}</p>
+                                        {isEditing ? (
+                                            <input className="w-full border rounded px-2 py-1" value={editTenant.idNumber} onChange={e => setEditTenant({...editTenant, idNumber: e.target.value})} />
+                                        ) : (
+                                            <p className="text-slate-800">{tenant.idNumber}</p>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="text-xs text-slate-500 uppercase font-bold">Birthday</label>
-                                        <p className="text-slate-800">{tenant.birthday}</p>
+                                        {isEditing ? (
+                                            <input type="date" className="w-full border rounded px-2 py-1" value={editTenant.birthday} onChange={e => setEditTenant({...editTenant, birthday: e.target.value})} />
+                                        ) : (
+                                            <p className="text-slate-800">{tenant.birthday}</p>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="text-xs text-slate-500 uppercase font-bold">Address</label>
-                                        <p className="text-slate-800 text-sm">{tenant.homeAddress}</p>
+                                        {isEditing ? (
+                                            <input className="w-full border rounded px-2 py-1" value={editTenant.homeAddress} onChange={e => setEditTenant({...editTenant, homeAddress: e.target.value})} />
+                                        ) : (
+                                            <p className="text-slate-800 text-sm">{tenant.homeAddress}</p>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="text-xs text-slate-500 uppercase font-bold">Motorcycle</label>
-                                        <p className="text-slate-800">{tenant.motorcyclePlate || 'N/A'}</p>
+                                        {isEditing ? (
+                                            <input className="w-full border rounded px-2 py-1" value={editTenant.motorcyclePlate || ''} onChange={e => setEditTenant({...editTenant, motorcyclePlate: e.target.value})} />
+                                        ) : (
+                                            <p className="text-slate-800">{tenant.motorcyclePlate || 'N/A'}</p>
+                                        )}
                                     </div>
                                     <div className="col-span-2 mt-2 pt-2 border-t border-slate-200">
                                         <label className="text-xs text-slate-500 uppercase font-bold">Current Residence</label>
@@ -111,6 +178,9 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                     </h3>
                                     {tenant.currentContract?.status === ContractStatus.ACTIVE && (
                                         <div className="flex gap-2">
+                                            <button onClick={handlePrint} className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Print Contract">
+                                                <Printer size={18} />
+                                            </button>
                                             <button 
                                                 onClick={() => setView('renew')}
                                                 className="px-3 py-1.5 text-sm bg-brand-50 text-brand-700 rounded-lg hover:bg-brand-100 font-medium flex items-center gap-1"
@@ -139,22 +209,43 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Rent Amount</label>
-                                                <div className="font-medium">NT$ {tenant.currentContract.rentAmount.toLocaleString()} / {tenant.currentContract.paymentFrequency}</div>
+                                                {isEditing && editContract ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-sm">NT$</span>
+                                                        <input className="w-24 border rounded px-1" type="number" value={editContract.rentAmount} onChange={e => setEditContract({...editContract, rentAmount: Number(e.target.value)})} />
+                                                    </div>
+                                                ) : (
+                                                    <div className="font-medium">NT$ {tenant.currentContract.rentAmount.toLocaleString()} / {tenant.currentContract.paymentFrequency}</div>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Duration</label>
-                                                <div className="font-medium text-sm">
-                                                    {tenant.currentContract.startDate} <span className="text-slate-400">to</span> {tenant.currentContract.endDate}
-                                                </div>
+                                                {isEditing && editContract ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <input type="date" className="border rounded px-1 text-sm" value={editContract.startDate} onChange={e => setEditContract({...editContract, startDate: e.target.value})} />
+                                                        <input type="date" className="border rounded px-1 text-sm" value={editContract.endDate} onChange={e => setEditContract({...editContract, endDate: e.target.value})} />
+                                                    </div>
+                                                ) : (
+                                                    <div className="font-medium text-sm">
+                                                        {tenant.currentContract.startDate} <span className="text-slate-400">to</span> {tenant.currentContract.endDate}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Deposit</label>
-                                                <div className="font-medium text-sm flex items-center gap-2">
-                                                    NT$ {tenant.currentContract.depositAmount.toLocaleString()}
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${tenant.currentContract.depositStatus === 'Paid' ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : 'border-red-200 text-red-700'}`}>
-                                                        {tenant.currentContract.depositStatus}
-                                                    </span>
-                                                </div>
+                                                {isEditing && editContract ? (
+                                                     <div className="flex items-center gap-1">
+                                                        <span className="text-sm">NT$</span>
+                                                        <input className="w-24 border rounded px-1" type="number" value={editContract.depositAmount} onChange={e => setEditContract({...editContract, depositAmount: Number(e.target.value)})} />
+                                                    </div>
+                                                ) : (
+                                                    <div className="font-medium text-sm flex items-center gap-2">
+                                                        NT$ {tenant.currentContract.depositAmount.toLocaleString()}
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${tenant.currentContract.depositStatus === 'Paid' ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : 'border-red-200 text-red-700'}`}>
+                                                            {tenant.currentContract.depositStatus}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="col-span-2">
                                                 <label className="text-xs text-slate-400">Items Issued</label>
