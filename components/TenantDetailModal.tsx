@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap } from 'lucide-react';
 import { TenantWithContract, ContractStatus, PaymentFrequency, DepositStatus, Contract } from '../types';
-import { calculateProration, terminateContract, createContract, updateTenant, updateContract } from '../services/propertyService';
+import { calculateProration, terminateContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate } from '../services/propertyService';
 
 interface Props {
     tenant: TenantWithContract;
@@ -17,14 +17,25 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     const [editContract, setEditContract] = useState(tenant.currentContract ? { ...tenant.currentContract } : null);
 
     // Termination State
-    const [terminationDate, setTerminationDate] = useState('');
+    const [terminationDate, setTerminationDate] = useState(new Date().toISOString().split('T')[0]);
     const [terminationReason, setTerminationReason] = useState('');
     const [prorationAmount, setProrationAmount] = useState<number | null>(null);
+    
+    // Final Electricity State
+    const [finalReading, setFinalReading] = useState<string>('');
+    const [elecCost, setElecCost] = useState<number>(0);
+    const currentRate = tenant.room ? getCurrentElectricityRate(terminationDate, tenant.room.id) : 5.0;
 
-    // Renewal State
-    const [renewStartDate, setRenewStartDate] = useState('');
-    const [renewEndDate, setRenewEndDate] = useState('');
-    const [renewRent, setRenewRent] = useState(tenant.currentContract?.rentAmount || 0);
+    useEffect(() => {
+        if (finalReading && tenant.room) {
+            const usage = parseFloat(finalReading) - tenant.room.currentMeterReading;
+            if (usage >= 0) {
+                setElecCost(usage * currentRate);
+            } else {
+                setElecCost(0);
+            }
+        }
+    }, [finalReading, tenant.room, currentRate]);
 
     const handleCalculateProration = () => {
         if (!terminationDate || !tenant.currentContract) return;
@@ -33,9 +44,16 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     };
 
     const handleTerminate = () => {
-        if (!tenant.currentContract) return;
+        if (!tenant.currentContract || !tenant.room) return;
+        
+        // 1. Record final meter reading if provided
+        if (finalReading) {
+            recordMeterReading(tenant.room.id, parseFloat(finalReading), terminationDate);
+        }
+
+        // 2. Terminate the contract
         terminateContract(tenant.currentContract.id, terminationDate, terminationReason);
-        onClose(); // In a real app, maybe show a success toast first
+        onClose();
     };
 
     const handleRenew = () => {
@@ -48,7 +66,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
             startDate: renewStartDate,
             endDate: renewEndDate,
             rentAmount: renewRent,
-            paymentFrequency: oldContract.paymentFrequency,
+            paymentFrequency: renewFrequency,
             depositAmount: oldContract.depositAmount,
             depositStatus: DepositStatus.PAID,
             itemsIssued: oldContract.itemsIssued
@@ -62,14 +80,18 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
             updateContract(tenant.currentContract.id, editContract);
         }
         setIsEditing(false);
-        // We'd ideally refresh the parent data here, but closing will force refresh on re-open in this prototype architecture
         onClose(); 
     };
 
     const handlePrint = () => {
         alert("Generating PDF Contract... (Feature stub)");
-        // window.print(); // In real app, this would open a formatted print window
     };
+
+    // Renewal Form State
+    const [renewStartDate, setRenewStartDate] = useState('');
+    const [renewEndDate, setRenewEndDate] = useState('');
+    const [renewRent, setRenewRent] = useState(tenant.currentContract?.rentAmount || 0);
+    const [renewFrequency, setRenewFrequency] = useState<PaymentFrequency>(tenant.currentContract?.paymentFrequency || PaymentFrequency.MONTHLY);
 
     if (!tenant) return null;
 
@@ -208,14 +230,30 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="text-xs text-slate-400">Rent Amount</label>
+                                                <label className="text-xs text-slate-400">Rent Amount (Monthly Base)</label>
                                                 {isEditing && editContract ? (
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-sm">NT$</span>
                                                         <input className="w-24 border rounded px-1" type="number" value={editContract.rentAmount} onChange={e => setEditContract({...editContract, rentAmount: Number(e.target.value)})} />
                                                     </div>
                                                 ) : (
-                                                    <div className="font-medium">NT$ {tenant.currentContract.rentAmount.toLocaleString()} / {tenant.currentContract.paymentFrequency}</div>
+                                                    <div className="font-medium">NT$ {tenant.currentContract.rentAmount.toLocaleString()}</div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-slate-400">Payment Frequency</label>
+                                                {isEditing && editContract ? (
+                                                    <select 
+                                                        className="w-full border rounded px-1 text-sm py-1" 
+                                                        value={editContract.paymentFrequency} 
+                                                        onChange={e => setEditContract({...editContract, paymentFrequency: e.target.value as PaymentFrequency})}
+                                                    >
+                                                        {Object.values(PaymentFrequency).map(f => (
+                                                            <option key={f} value={f}>{f}</option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <div className="font-medium">{tenant.currentContract.paymentFrequency}</div>
                                                 )}
                                             </div>
                                             <div>
@@ -271,62 +309,104 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
 
                     {/* View: Terminate */}
                     {view === 'terminate' && tenant.currentContract && (
-                        <div className="bg-red-50 border border-red-100 rounded-xl p-6 space-y-6">
-                            <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
-                                <AlertTriangle className="text-red-600"/> Early Termination
-                            </h3>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-red-900 mb-1">Termination Date</label>
-                                    <input 
-                                        type="date" 
-                                        className="w-full border border-red-200 rounded-lg p-2 focus:ring-red-500 focus:border-red-500"
-                                        value={terminationDate}
-                                        onChange={(e) => setTerminationDate(e.target.value)}
-                                    />
+                        <div className="space-y-6">
+                            <div className="bg-red-50 border border-red-100 rounded-xl p-6 space-y-6">
+                                <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
+                                    <AlertTriangle className="text-red-600"/> Early Termination Settlement
+                                </h3>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-red-900 mb-1">Termination Date</label>
+                                            <input 
+                                                type="date" 
+                                                className="w-full border border-red-200 rounded-lg p-2 focus:ring-red-500 focus:border-red-500"
+                                                value={terminationDate}
+                                                onChange={(e) => setTerminationDate(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="flex items-end">
+                                            <button 
+                                                onClick={handleCalculateProration}
+                                                className="w-full py-2 bg-white border border-red-200 text-red-700 rounded-lg hover:bg-red-100 text-sm font-bold"
+                                            >
+                                                Calc Rent Proration
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {prorationAmount !== null && (
+                                        <div className="bg-white p-4 rounded-lg border border-red-100">
+                                            <p className="text-xs text-slate-500">Base Rent: NT${tenant.currentContract.rentAmount.toLocaleString()}/mo</p>
+                                            <p className="text-lg font-bold text-slate-900 mt-1">
+                                                Prorated Rent: NT$ {prorationAmount.toLocaleString()}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-red-900 mb-1">Reason for Move-out</label>
+                                        <textarea 
+                                            className="w-full border border-red-200 rounded-lg p-2 h-20" 
+                                            placeholder="e.g., Job relocation"
+                                            value={terminationReason}
+                                            onChange={(e) => setTerminationReason(e.target.value)}
+                                        ></textarea>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-red-900 mb-1">Reason</label>
-                                    <textarea 
-                                        className="w-full border border-red-200 rounded-lg p-2 h-20" 
-                                        placeholder="e.g., Job relocation"
-                                        value={terminationReason}
-                                        onChange={(e) => setTerminationReason(e.target.value)}
-                                    ></textarea>
+                            </div>
+
+                            {/* Final Electricity Billing */}
+                            <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-6 space-y-4">
+                                <h3 className="text-lg font-bold text-yellow-800 flex items-center gap-2">
+                                    <Zap className="text-yellow-600"/> Final Electricity Meter
+                                </h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-yellow-700 uppercase mb-1">Last Recorded Reading</label>
+                                        <div className="bg-white border border-yellow-200 p-2 rounded-lg font-mono text-slate-500">
+                                            {tenant.room?.currentMeterReading}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-yellow-700 uppercase mb-1">Final Reading</label>
+                                        <input 
+                                            type="number" 
+                                            className="w-full border border-yellow-200 rounded-lg p-2 font-mono"
+                                            placeholder="Current Meter"
+                                            value={finalReading}
+                                            onChange={(e) => setFinalReading(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
-                                <button 
-                                    onClick={handleCalculateProration}
-                                    className="text-sm text-red-700 underline font-medium"
-                                >
-                                    Calculate Proration
-                                </button>
-                                
-                                {prorationAmount !== null && (
-                                    <div className="bg-white p-4 rounded-lg border border-red-100">
-                                        <p className="text-sm text-slate-500">Based on rent NT${tenant.currentContract.rentAmount}/mo</p>
-                                        <p className="text-lg font-bold text-slate-900 mt-1">
-                                            Estimated Usage Fee: NT$ {prorationAmount.toLocaleString()}
-                                        </p>
-                                        <p className="text-xs text-slate-400 mt-1">
-                                            (Check specific contract terms regarding deposit penalty)
-                                        </p>
+                                {elecCost > 0 && (
+                                    <div className="p-3 bg-white border border-yellow-200 rounded-lg flex justify-between items-center">
+                                        <div>
+                                            <p className="text-xs text-slate-500">Usage Cost @ NT${currentRate}/deg</p>
+                                            <p className="text-sm font-bold text-slate-800">
+                                                Final Utility Bill: NT$ {elecCost.toLocaleString()}
+                                            </p>
+                                        </div>
+                                        <div className="text-xs font-bold text-yellow-600">
+                                            {parseFloat(finalReading) - (tenant.room?.currentMeterReading || 0)} deg
+                                        </div>
                                     </div>
                                 )}
+                            </div>
 
-                                <div className="flex gap-3 pt-4">
-                                    <button 
-                                        className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 font-medium"
-                                        onClick={handleTerminate}
-                                    >
-                                        Confirm Termination
-                                    </button>
-                                    <button 
-                                        className="px-4 py-2 border border-slate-300 bg-white rounded-lg hover:bg-slate-50"
-                                        onClick={() => setView('details')}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
+                            <div className="flex gap-3 pt-4 sticky bottom-0 bg-white p-4 border-t border-slate-100">
+                                <button 
+                                    className="flex-1 bg-red-600 text-white py-3 rounded-xl hover:bg-red-700 font-bold transition-colors"
+                                    onClick={handleTerminate}
+                                >
+                                    Confirm Final Settlement
+                                </button>
+                                <button 
+                                    className="px-6 py-3 border border-slate-300 bg-white rounded-xl hover:bg-slate-50 text-slate-600 font-medium"
+                                    onClick={() => setView('details')}
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         </div>
                     )}
@@ -356,14 +436,26 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                      onChange={(e) => setRenewEndDate(e.target.value)}
                                  />
                              </div>
-                             <div className="col-span-2">
-                                 <label className="block text-sm font-medium text-brand-900 mb-1">New Rent Amount (NTD)</label>
+                             <div>
+                                 <label className="block text-sm font-medium text-brand-900 mb-1">New Rent Amount (Monthly)</label>
                                  <input 
                                      type="number" 
                                      className="w-full border border-brand-200 rounded-lg p-2"
                                      value={renewRent}
                                      onChange={(e) => setRenewRent(Number(e.target.value))}
                                  />
+                             </div>
+                             <div>
+                                 <label className="block text-sm font-medium text-brand-900 mb-1">Payment Frequency</label>
+                                 <select 
+                                    className="w-full border border-brand-200 rounded-lg p-2 bg-white" 
+                                    value={renewFrequency} 
+                                    onChange={(e) => setRenewFrequency(e.target.value as PaymentFrequency)}
+                                 >
+                                    {Object.values(PaymentFrequency).map(f => (
+                                        <option key={f} value={f}>{f}</option>
+                                    ))}
+                                 </select>
                              </div>
 
                              <div className="col-span-2 flex gap-3 pt-4">

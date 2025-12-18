@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { DollarSign, Zap, PenTool, WashingMachine, Plus, Check, Search, CreditCard, Edit, Trash2, Calendar, FileText, Settings, X, BarChart2 } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { DollarSign, Zap, PenTool, WashingMachine, Plus, Check, Search, CreditCard, Edit, Trash2, Calendar, FileText, Settings, X, BarChart2, Calculator } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart, Area, Cell } from 'recharts';
 import { 
-    getTransactions, getExpenses, getRooms, getBuildings, getTenants, 
+    getTransactions, getExpenses, getRooms, getBuildings, getTenants, getTenantInRoom,
     addTransaction, updateTransaction, deleteTransaction, 
     addExpense, updateExpense, deleteExpense,
     recordMeterReading, getElectricityRates, addElectricityRate, deleteElectricityRate, getCurrentElectricityRate,
@@ -32,6 +33,7 @@ const FinanceManager: React.FC = () => {
             </div>
 
             <div className="min-h-[400px]">
+                {/* Properly keyed sub-components with React.FC typing to avoid TS property errors */}
                 {activeTab === 'payments' && <PaymentsTab key={refreshTrigger} onRefresh={refresh} />}
                 {activeTab === 'electricity' && <ElectricityTab key={refreshTrigger} onRefresh={refresh} />}
                 {activeTab === 'expenses' && <ExpensesTab key={refreshTrigger} onRefresh={refresh} />}
@@ -57,7 +59,8 @@ const TabButton = ({ id, label, icon: Icon, active, onClick }: any) => (
 
 // --- 1. PAYMENTS TAB ---
 
-const PaymentsTab = ({ onRefresh }: { onRefresh: () => void }) => {
+// Using React.FC to allow 'key' and other standard props
+const PaymentsTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
     const [transactions, setTransactions] = useState(getTransactions());
     const rooms = getRooms();
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -157,7 +160,8 @@ const PaymentsTab = ({ onRefresh }: { onRefresh: () => void }) => {
 
 // --- 2. ELECTRICITY TAB ---
 
-const ElectricityTab = ({ onRefresh }: { onRefresh: () => void }) => {
+// Using React.FC to allow 'key' and other standard props
+const ElectricityTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
     const rooms = getRooms();
     const buildings = getBuildings();
     const occupiedRooms = rooms.filter(r => r.status === 'Occupied');
@@ -245,7 +249,8 @@ const ElectricityTab = ({ onRefresh }: { onRefresh: () => void }) => {
 
 // --- 3. EXPENSES TAB ---
 
-const ExpensesTab = ({ onRefresh }: { onRefresh: () => void }) => {
+// Using React.FC to allow 'key' and other standard props
+const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
     const [expenses, setExpenses] = useState(getExpenses());
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -415,7 +420,8 @@ const ExpensesTab = ({ onRefresh }: { onRefresh: () => void }) => {
 
 // --- 4. MACHINES TAB ---
 
-const MachinesTab = ({ onRefresh }: { onRefresh: () => void }) => {
+// Using React.FC to allow 'key' and other standard props
+const MachinesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
     const [amount, setAmount] = useState('');
     const [desc, setDesc] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -478,77 +484,194 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
     const buildings = getBuildings();
     const [selectedBuilding, setSelectedBuilding] = useState(buildings[0].id);
     const rooms = getRooms().filter(r => r.buildingId === selectedBuilding);
-    const tenants = getTenants();
     
-    const [formData, setFormData] = useState({
-        roomId: rooms[0]?.id || '',
-        amount: '',
-        type: 'Rent',
-        method: 'Transfer',
-        date: new Date().toISOString().split('T')[0],
-        note: ''
-    });
+    // Form State
+    const [roomId, setRoomId] = useState(rooms[0]?.id || '');
+    const [type, setType] = useState('Rent');
+    const [amount, setAmount] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [note, setNote] = useState('');
+    const [method, setMethod] = useState('Transfer');
+    
+    // Enhanced Rent Logic
+    const [paymentTermMonths, setPaymentTermMonths] = useState(1); // 1, 3, 6, 12
+    const [discount, setDiscount] = useState(0);
+    const [periodStart, setPeriodStart] = useState(new Date().toISOString().split('T')[0]);
+    
+    // Fetch base rent when room changes
+    useEffect(() => {
+        if(roomId && type === 'Rent') {
+            const tenant = getTenantInRoom(roomId);
+            if(tenant && tenant.currentContract) {
+                 const monthlyRent = tenant.currentContract.rentAmount;
+                 const calculated = (monthlyRent * paymentTermMonths) - discount;
+                 setAmount(calculated.toString());
+            }
+        }
+    }, [roomId, paymentTermMonths, discount, type]);
 
-    const tenantName = getTransactions().find(t => t.roomId === formData.roomId)?.tenantName || 'Unknown'; // Simple lookup fallback
+    // Update roomId if buildings change and current room is invalid
+    useEffect(() => {
+        if (!rooms.find(r => r.id === roomId)) {
+            setRoomId(rooms[0]?.id || '');
+        }
+    }, [rooms]);
+
+    // Calculate Period End
+    const getPeriodEnd = (start: string, months: number) => {
+        const d = new Date(start);
+        d.setMonth(d.getMonth() + months);
+        d.setDate(d.getDate() - 1);
+        return d.toISOString().split('T')[0];
+    };
 
     const handleSubmit = () => {
+        const tenant = getTenantInRoom(roomId);
+        const tenantName = tenant?.name || 'Unknown';
+        const contractId = tenant?.currentContract?.id;
+
+        const periodEnd = type === 'Rent' ? getPeriodEnd(periodStart, paymentTermMonths) : undefined;
+        const finalNote = type === 'Rent' && discount > 0 ? `${note} (Includes NT$${discount} discount)`.trim() : note;
+
         addTransaction({
-            roomId: formData.roomId,
+            roomId: roomId,
             tenantName: tenantName, 
-            type: formData.type as any,
-            amount: Number(formData.amount),
-            dueDate: formData.date,
+            contractId: contractId,
+            type: type as any,
+            amount: Number(amount),
+            dueDate: date, // For manual payment, due date = payment date usually
             status: 'Paid',
-            paidDate: formData.date,
-            method: formData.method as any,
-            note: formData.note
+            paidDate: date,
+            method: method as any,
+            note: finalNote,
+            periodStart: type === 'Rent' ? periodStart : undefined,
+            periodEnd: periodEnd
         });
         onClose();
     };
 
     return (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-xl shadow-2xl w-96 animate-fade-in">
+            <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg animate-fade-in max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between mb-4">
-                    <h3 className="font-bold text-lg">Manual Payment</h3>
+                    <h3 className="font-bold text-lg">Record Manual Payment</h3>
                     <button onClick={onClose}><X size={20} className="text-slate-400" /></button>
                 </div>
-                <div className="space-y-3">
-                    <div>
-                        <label className="text-xs text-slate-500 font-bold">Building</label>
-                        <select className="w-full border p-2 rounded" value={selectedBuilding} onChange={e => setSelectedBuilding(e.target.value)}>
-                            {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                        </select>
+                
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Building</label>
+                            <select className="w-full border p-2 rounded text-sm" value={selectedBuilding} onChange={e => setSelectedBuilding(e.target.value)}>
+                                {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Room</label>
+                            <select className="w-full border p-2 rounded text-sm" value={roomId} onChange={e => setRoomId(e.target.value)}>
+                                {rooms.map(r => <option key={r.id} value={r.id}>{r.roomNumber}</option>)}
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-xs text-slate-500 font-bold">Room</label>
-                        <select className="w-full border p-2 rounded" value={formData.roomId} onChange={e => setFormData({...formData, roomId: e.target.value})}>
-                            {rooms.map(r => <option key={r.id} value={r.id}>{r.roomNumber}</option>)}
-                        </select>
+
+                    <div className="grid grid-cols-2 gap-4">
+                         <div>
+                            <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Type</label>
+                            <select className="w-full border p-2 rounded text-sm" value={type} onChange={e => setType(e.target.value)}>
+                                <option value="Rent">Rent</option>
+                                <option value="Deposit">Deposit</option>
+                                <option value="Electricity">Electricity</option>
+                                <option value="Fee">Other Fee</option>
+                            </select>
+                        </div>
+                        <div>
+                             <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Method</label>
+                            <select className="w-full border p-2 rounded text-sm" value={method} onChange={e => setMethod(e.target.value)}>
+                                <option value="Transfer">Bank Transfer</option>
+                                <option value="Cash">Cash</option>
+                                <option value="LinePay">Line Pay</option>
+                            </select>
+                        </div>
                     </div>
-                     <div>
-                        <label className="text-xs text-slate-500 font-bold">Type</label>
-                        <select className="w-full border p-2 rounded" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
-                            <option value="Rent">Rent</option>
-                            <option value="Deposit">Deposit</option>
-                            <option value="Electricity">Electricity</option>
-                        </select>
+
+                    {/* Rent Specific Logic */}
+                    {type === 'Rent' && (
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                             <div>
+                                <label className="text-xs text-brand-600 font-bold uppercase mb-1 block">Payment Term</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[1, 3, 6, 12].map(m => (
+                                        <button 
+                                            key={m}
+                                            onClick={() => setPaymentTermMonths(m)}
+                                            className={`py-1 text-xs border rounded ${paymentTermMonths === m ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-600 border-slate-300'}`}
+                                        >
+                                            {m === 1 ? 'Monthly' : m === 12 ? 'Yearly' : `${m} Months`}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Period Start</label>
+                                    <input type="date" className="w-full border p-2 rounded text-sm" value={periodStart} onChange={e => setPeriodStart(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Period End</label>
+                                    <div className="w-full bg-slate-100 p-2 rounded text-sm text-slate-600 border border-slate-200">
+                                        {getPeriodEnd(periodStart, paymentTermMonths)}
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Discount (NT$)</label>
+                                <div className="flex items-center">
+                                    <input 
+                                        type="number" 
+                                        className="w-full border p-2 rounded text-sm" 
+                                        value={discount} 
+                                        onChange={e => setDiscount(Number(e.target.value))} 
+                                        placeholder="0"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Total Amount</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-2 text-slate-400 text-sm">NT$</span>
+                                <input 
+                                    type="number" 
+                                    className="w-full border border-slate-300 p-2 pl-10 rounded text-sm font-bold text-slate-800" 
+                                    value={amount} 
+                                    onChange={e => setAmount(e.target.value)} 
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Paid Date</label>
+                            <input type="date" className="w-full border p-2 rounded text-sm" value={date} onChange={e => setDate(e.target.value)} />
+                        </div>
                     </div>
+                    
                     <div>
-                        <label className="text-xs text-slate-500 font-bold">Amount</label>
-                        <input type="number" className="w-full border p-2 rounded" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="text-xs text-slate-500 font-bold">Payment Date</label>
-                        <input type="date" className="w-full border p-2 rounded" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="text-xs text-slate-500 font-bold">Note</label>
-                        <textarea className="w-full border p-2 rounded h-20 text-sm" placeholder="Any details..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
+                        <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Note</label>
+                        <textarea 
+                            className="w-full border p-2 rounded text-sm h-16" 
+                            placeholder="Optional details..." 
+                            value={note} 
+                            onChange={e => setNote(e.target.value)}
+                        ></textarea>
                     </div>
                 </div>
-                <div className="flex gap-2 mt-6">
-                    <button onClick={handleSubmit} className="flex-1 bg-brand-600 text-white py-2 rounded font-medium hover:bg-brand-700">Save Record</button>
+
+                <div className="mt-6">
+                    <button onClick={handleSubmit} className="w-full bg-brand-600 text-white py-3 rounded-lg font-bold hover:bg-brand-700 transition-colors flex items-center justify-center gap-2">
+                        <Check size={18} /> Record Payment
+                    </button>
                 </div>
             </div>
         </div>

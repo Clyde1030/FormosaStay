@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import { askAssistant } from '../services/geminiService';
@@ -60,7 +61,8 @@ const AIAssistant: React.FC = () => {
                 </div>
                 <div>
                     <h3 className="font-bold text-slate-800">AI Property Consultant</h3>
-                    <p className="text-xs text-slate-500">Powered by Gemini 2.5 Flash</p>
+                    {/* Updated model label in UI */}
+                    <p className="text-xs text-slate-500">Powered by Gemini 3 Pro</p>
                 </div>
             </div>
 

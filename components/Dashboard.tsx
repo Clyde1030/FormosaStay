@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { getDashboardStats, getBuildings } from '../services/propertyService';
-import { Users, AlertCircle, DollarSign, Home, Wallet, TrendingUp, Settings } from 'lucide-react';
+import { getDashboardStats, getBuildings, getTransactions, getRooms } from '../services/propertyService';
+import { Users, AlertCircle, DollarSign, Home, Wallet, TrendingUp, Settings, X, ChevronRight } from 'lucide-react';
+import { Transaction } from '../types';
 
 const Dashboard: React.FC = () => {
     const [expiryDays, setExpiryDays] = useState(60);
+    const [isUnpaidModalOpen, setIsUnpaidModalOpen] = useState(false);
     const stats = getDashboardStats(expiryDays);
     const buildings = getBuildings();
 
@@ -43,6 +45,8 @@ const Dashboard: React.FC = () => {
                     subtext="Pending Actions"
                     icon={<AlertCircle className="text-red-500" />}
                     bgColor="bg-red-50"
+                    onClick={() => setIsUnpaidModalOpen(true)}
+                    isClickable
                 />
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between hover:shadow-md transition-shadow relative">
                     <div className="flex items-start justify-between">
@@ -137,21 +141,120 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {isUnpaidModalOpen && <UnpaidDetailsModal onClose={() => setIsUnpaidModalOpen(false)} />}
         </div>
     );
 };
 
-const StatCard = ({ title, value, subtext, icon, bgColor }: any) => (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-start justify-between hover:shadow-md transition-shadow">
+const StatCard = ({ title, value, subtext, icon, bgColor, onClick, isClickable }: any) => (
+    <div 
+        className={`bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-start justify-between transition-all ${isClickable ? 'cursor-pointer hover:shadow-md hover:border-brand-200 group' : ''}`}
+        onClick={onClick}
+    >
         <div>
             <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
             <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
             <p className="text-xs text-slate-400 mt-1">{subtext}</p>
+            {isClickable && (
+                <div className="mt-3 text-xs font-bold text-brand-600 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    View Details <ChevronRight size={12} />
+                </div>
+            )}
         </div>
         <div className={`p-3 rounded-lg ${bgColor}`}>
             {icon}
         </div>
     </div>
 );
+
+const UnpaidDetailsModal = ({ onClose }: { onClose: () => void }) => {
+    const transactions = getTransactions().filter(t => t.status === 'Overdue' || t.status === 'Pending');
+    const rooms = getRooms();
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col animate-fade-in">
+                <div className="flex justify-between items-center p-6 border-b border-slate-100">
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-800">Unpaid & Overdue Payments</h3>
+                        <p className="text-sm text-slate-500">List of all pending rent, electricity, and fee collections.</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} className="text-slate-500" /></button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-0">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
+                            <tr>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase">Status</th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase">Room & Tenant</th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase">Category</th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase">Payment Period</th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                             {transactions.length > 0 ? transactions.map(t => {
+                                 const roomNumber = rooms.find(r => r.id === t.roomId)?.roomNumber || 'N/A';
+                                 return (
+                                     <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                                         <td className="p-4">
+                                             <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                                                 t.status === 'Overdue' 
+                                                 ? 'bg-red-50 text-red-700 border-red-200' 
+                                                 : 'bg-orange-50 text-orange-700 border-orange-200'
+                                             }`}>
+                                                 {t.status}
+                                             </span>
+                                         </td>
+                                         <td className="p-4">
+                                             <div className="font-bold text-slate-800 flex items-center gap-2">
+                                                 Room {roomNumber}
+                                             </div>
+                                             <div className="text-xs text-slate-500 mt-0.5">{t.tenantName || 'Unknown Tenant'}</div>
+                                         </td>
+                                         <td className="p-4">
+                                             <span className={`text-sm font-medium ${
+                                                 t.type === 'Rent' ? 'text-indigo-600' : 
+                                                 t.type === 'Electricity' ? 'text-yellow-600' : 'text-slate-600'
+                                             }`}>
+                                                 {t.type}
+                                             </span>
+                                         </td>
+                                         <td className="p-4 text-sm text-slate-600">
+                                             <div className="font-medium">Due: {t.dueDate}</div>
+                                             {t.periodStart && (
+                                                <div className="text-xs text-slate-400 mt-0.5">
+                                                    {t.periodStart} ~ {t.periodEnd}
+                                                </div>
+                                             )}
+                                         </td>
+                                         <td className="p-4 text-right font-bold text-slate-700">
+                                             NT$ {t.amount.toLocaleString()}
+                                         </td>
+                                     </tr>
+                                 )
+                             }) : (
+                                 <tr>
+                                     <td colSpan={5} className="p-8 text-center text-slate-400">
+                                         No unpaid items found. Great job!
+                                     </td>
+                                 </tr>
+                             )}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-between items-center text-sm text-slate-500">
+                    <span>Total Unpaid Items: {transactions.length}</span>
+                    <span className="font-bold text-slate-800">
+                        Total Amount: NT$ {transactions.reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default Dashboard;

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 // Initialize the client
@@ -20,8 +21,9 @@ Keep responses concise, professional, and helpful.
 
 export const askAssistant = async (prompt: string): Promise<string> => {
     try {
+        // Updated model to gemini-3-pro-preview for complex reasoning tasks
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3-pro-preview',
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,

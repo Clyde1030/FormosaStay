@@ -1,8 +1,10 @@
+
 import React, { useState } from 'react';
 import { getBuildings, getRooms, getTenantInRoom, getTransactionsByRoom } from '../services/propertyService';
 import { Room, Building, TenantWithContract } from '../types';
-import { User, Zap, DollarSign, X, ArrowRight } from 'lucide-react';
+import { User, Zap, DollarSign, X, ArrowRight, MapPin, Maximize } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Area, Legend } from 'recharts';
+import TenantDetailModal from './TenantDetailModal';
 
 const RoomManager: React.FC = () => {
     const buildings = getBuildings();
@@ -40,7 +42,8 @@ const RoomManager: React.FC = () => {
     );
 };
 
-const RoomCard = ({ room, onClick }: { room: Room, onClick: () => void }) => {
+// Typed as React.FC to fix TypeScript property error for 'key' prop
+const RoomCard: React.FC<{ room: Room, onClick: () => void }> = ({ room, onClick }) => {
     const isOccupied = room.status === 'Occupied';
     return (
         <div 
@@ -63,20 +66,45 @@ const RoomCard = ({ room, onClick }: { room: Room, onClick: () => void }) => {
 const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () => void }) => {
     const tenant = getTenantInRoom(roomId);
     const room = getRooms().find(r => r.id === roomId);
+    const buildings = getBuildings();
+    const building = buildings.find(b => b.id === room?.buildingId);
+    
+    const [isTenantModalOpen, setIsTenantModalOpen] = useState(false);
     const txs = getTransactionsByRoom(roomId);
 
     // Chart Data Preparation
     const rentData = txs.filter(t => t.type === 'Rent').map(t => ({
         date: t.dueDate,
         amount: t.amount,
-        status: t.status
+        status: t.status,
+        periodStart: t.periodStart,
+        periodEnd: t.periodEnd
     })).reverse();
 
     const elecData = txs.filter(t => t.type === 'Electricity').map(t => ({
         date: t.dueDate,
         usage: (t.readingEnd || 0) - (t.readingStart || 0),
-        cost: t.amount
+        cost: t.amount,
+        periodStart: t.periodStart,
+        periodEnd: t.periodEnd
     })).reverse();
+
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+                <div className="bg-white p-3 border border-slate-200 shadow-lg rounded-lg text-xs z-50">
+                    <p className="font-bold text-slate-800 mb-1">{data.date}</p>
+                    <p className="text-slate-600">Amount: <span className="font-medium">NT$ {data.amount.toLocaleString()}</span></p>
+                    {data.periodStart && (
+                        <p className="text-slate-500 mt-1">Period: {data.periodStart} ~ {data.periodEnd}</p>
+                    )}
+                    <p className={`mt-1 font-medium ${data.status === 'Paid' ? 'text-emerald-600' : 'text-red-600'}`}>{data.status}</p>
+                </div>
+            );
+        }
+        return null;
+    };
 
     return (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex justify-end">
@@ -84,7 +112,10 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                 <div className="p-6 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white z-10">
                     <div>
                         <h2 className="text-2xl font-bold text-slate-800">Room {room?.roomNumber} Dashboard</h2>
-                        <p className="text-slate-500">{tenant ? `Tenant: ${tenant.name}` : 'Currently Vacant'}</p>
+                        <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
+                            <span className="flex items-center gap-1"><MapPin size={14}/> {building?.address}</span>
+                            <span className="flex items-center gap-1"><Maximize size={14}/> {room?.sizePing} Ping</span>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <button 
@@ -98,15 +129,20 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
 
                 <div className="p-6 space-y-8">
                     {/* Tenant Info Card */}
-                    {tenant && (
+                    {tenant ? (
                         <div className="bg-brand-50 border border-brand-100 rounded-xl p-6 flex items-start gap-4">
                             <div className="bg-brand-100 p-3 rounded-full text-brand-600">
                                 <User size={24} />
                             </div>
                             <div className="flex-1 grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-xs text-brand-600 font-bold uppercase">Phone</label>
-                                    <p className="font-medium text-slate-800">{tenant.phoneNumber}</p>
+                                    <label className="text-xs text-brand-600 font-bold uppercase">Tenant</label>
+                                    <p 
+                                        className="font-medium text-slate-800 text-lg cursor-pointer hover:text-brand-600 hover:underline decoration-brand-600 underline-offset-4"
+                                        onClick={() => setIsTenantModalOpen(true)}
+                                    >
+                                        {tenant.name}
+                                    </p>
                                 </div>
                                 <div>
                                     <label className="text-xs text-brand-600 font-bold uppercase">Contract End</label>
@@ -122,6 +158,10 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                                 </div>
                             </div>
                         </div>
+                    ) : (
+                        <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">
+                             Currently Vacant
+                        </div>
                     )}
 
                     {/* Rent Chart */}
@@ -135,7 +175,7 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="date" />
                                     <YAxis />
-                                    <Tooltip />
+                                    <Tooltip content={<CustomTooltip />} />
                                     <Bar dataKey="amount" fill="#6366f1">
                                         {rentData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={entry.status === 'Paid' ? '#10b981' : '#ef4444'} />
@@ -158,7 +198,7 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                                     <XAxis dataKey="date" />
                                     <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
                                     <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                                    <Tooltip />
+                                    <Tooltip content={<CustomTooltip />} />
                                     <Legend />
                                     <Area yAxisId="left" type="monotone" dataKey="cost" fill="#8884d8" stroke="#8884d8" name="Bill ($)" />
                                     <Bar yAxisId="right" dataKey="usage" barSize={20} fill="#82ca9d" name="Usage (deg)" />
@@ -166,8 +206,14 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                             </ResponsiveContainer>
                         </div>
                     </div>
-
                 </div>
+
+                {isTenantModalOpen && tenant && (
+                    <TenantDetailModal 
+                        tenant={tenant} 
+                        onClose={() => setIsTenantModalOpen(false)} 
+                    />
+                )}
             </div>
         </div>
     );
