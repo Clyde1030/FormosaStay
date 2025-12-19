@@ -1,15 +1,24 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getBuildings, getRooms, getTenantInRoom, getTransactionsByRoom } from '../services/propertyService';
-import { Room, Building, TenantWithContract } from '../types';
+import { Room, Building, TenantWithContract, Transaction } from '../types';
 import { User, Zap, DollarSign, X, ArrowRight, MapPin, Maximize } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Area, Legend } from 'recharts';
 import TenantDetailModal from './TenantDetailModal';
 
 const RoomManager: React.FC = () => {
-    const buildings = getBuildings();
-    const rooms = getRooms();
+    const [buildings, setBuildings] = useState<Building[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
     const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+
+    useEffect(() => {
+        const loadData = async () => {
+            const [bs, rs] = await Promise.all([getBuildings(), getRooms()]);
+            setBuildings(bs);
+            setRooms(rs);
+        };
+        loadData();
+    }, []);
 
     return (
         <div className="space-y-8">
@@ -29,7 +38,7 @@ const RoomManager: React.FC = () => {
                             <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">{b.totalRooms} Rooms</span>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                            {rooms.filter(r => r.buildingId === b.id).map(r => (
+                            {rooms.filter(r => r.building_id === b.id).map(r => (
                                 <RoomCard key={r.id} room={r} onClick={() => setSelectedRoomId(r.id)} />
                             ))}
                         </div>
@@ -42,7 +51,6 @@ const RoomManager: React.FC = () => {
     );
 };
 
-// Typed as React.FC to fix TypeScript property error for 'key' prop
 const RoomCard: React.FC<{ room: Room, onClick: () => void }> = ({ room, onClick }) => {
     const isOccupied = room.status === 'Occupied';
     return (
@@ -64,16 +72,32 @@ const RoomCard: React.FC<{ room: Room, onClick: () => void }> = ({ room, onClick
 };
 
 const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () => void }) => {
-    const tenant = getTenantInRoom(roomId);
-    const room = getRooms().find(r => r.id === roomId);
-    const buildings = getBuildings();
-    const building = buildings.find(b => b.id === room?.buildingId);
-    
+    const [tenant, setTenant] = useState<TenantWithContract | null>(null);
+    const [room, setRoom] = useState<Room | null>(null);
+    const [building, setBuilding] = useState<Building | null>(null);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isTenantModalOpen, setIsTenantModalOpen] = useState(false);
-    const txs = getTransactionsByRoom(roomId);
 
-    // Chart Data Preparation
-    const rentData = txs.filter(t => t.type === 'Rent').map(t => ({
+    useEffect(() => {
+        const loadData = async () => {
+            const [t, rs, txs, bs] = await Promise.all([
+                getTenantInRoom(roomId),
+                getRooms(),
+                getTransactionsByRoom(roomId),
+                getBuildings()
+            ]);
+            const r = rs.find(item => item.id === roomId) || null;
+            setTenant(t);
+            setRoom(r);
+            setTransactions(txs);
+            if (r) {
+                setBuilding(bs.find(b => b.id === r.building_id) || null);
+            }
+        };
+        loadData();
+    }, [roomId]);
+
+    const rentData = transactions.filter(t => t.type === 'Rent').map(t => ({
         date: t.dueDate,
         amount: t.amount,
         status: t.status,
@@ -81,7 +105,7 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
         periodEnd: t.periodEnd
     })).reverse();
 
-    const elecData = txs.filter(t => t.type === 'Electricity').map(t => ({
+    const elecData = transactions.filter(t => t.type === 'Electricity').map(t => ({
         date: t.dueDate,
         usage: (t.readingEnd || 0) - (t.readingStart || 0),
         cost: t.amount,
@@ -89,7 +113,7 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
         periodEnd: t.periodEnd
     })).reverse();
 
-    const CustomTooltip = ({ active, payload, label }: any) => {
+    const CustomTooltip = ({ active, payload }: any) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
             return (

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap } from 'lucide-react';
 import { TenantWithContract, ContractStatus, PaymentFrequency, DepositStatus, Contract } from '../types';
@@ -24,6 +25,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     // Final Electricity State
     const [finalReading, setFinalReading] = useState<string>('');
     const [elecCost, setElecCost] = useState<number>(0);
+    // Fixed currentRate derivation to match synchronous getCurrentElectricityRate from propertyService
     const currentRate = tenant.room ? getCurrentElectricityRate(terminationDate, tenant.room.id) : 5.0;
 
     useEffect(() => {
@@ -43,41 +45,50 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
         setProrationAmount(amount);
     };
 
-    const handleTerminate = () => {
+    const handleTerminate = async () => {
         if (!tenant.currentContract || !tenant.room) return;
         
         // 1. Record final meter reading if provided
         if (finalReading) {
-            recordMeterReading(tenant.room.id, parseFloat(finalReading), terminationDate);
+            await recordMeterReading(tenant.room.id, parseFloat(finalReading), terminationDate);
         }
 
         // 2. Terminate the contract
-        terminateContract(tenant.currentContract.id, terminationDate, terminationReason);
+        await terminateContract(tenant.currentContract.id, terminationDate, terminationReason);
         onClose();
     };
 
-    const handleRenew = () => {
+    const handleRenew = async () => {
         if (!tenant.currentContract || !tenant.room) return;
         const oldContract = tenant.currentContract;
         
-        createContract({
-            tenantId: tenant.id,
-            roomId: tenant.room.id,
-            startDate: renewStartDate,
-            endDate: renewEndDate,
-            rentAmount: renewRent,
-            paymentFrequency: renewFrequency,
-            depositAmount: oldContract.depositAmount,
-            depositStatus: DepositStatus.PAID,
-            itemsIssued: oldContract.itemsIssued
+        // Fix: Map UI-friendly names back to database field names (tenant_id, room_id, etc.)
+        await createContract({
+            tenant_id: tenant.id,
+            room_id: tenant.room.id,
+            start_date: renewStartDate,
+            end_date: renewEndDate,
+            monthly_rent: renewRent,
+            payment_term: renewFrequency,
+            deposit: oldContract.depositAmount,
+            status: 'active',
+            pay_rent_on: oldContract.pay_rent_on || 1
         });
         onClose();
     };
 
-    const handleSaveEdits = () => {
-        updateTenant(tenant.id, editTenant);
+    const handleSaveEdits = async () => {
+        await updateTenant(tenant.id, editTenant);
         if (tenant.currentContract && editContract) {
-            updateContract(tenant.currentContract.id, editContract);
+            // Fix: Map UI properties back to backend schema fields for updateContract
+            await updateContract(tenant.currentContract.id, {
+                ...editContract,
+                monthly_rent: editContract.rentAmount,
+                payment_term: editContract.paymentFrequency,
+                start_date: editContract.startDate,
+                end_date: editContract.endDate,
+                deposit: editContract.depositAmount
+            });
         }
         setIsEditing(false);
         onClose(); 

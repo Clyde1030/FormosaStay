@@ -33,7 +33,6 @@ const FinanceManager: React.FC = () => {
             </div>
 
             <div className="min-h-[400px]">
-                {/* Properly keyed sub-components with React.FC typing to avoid TS property errors */}
                 {activeTab === 'payments' && <PaymentsTab key={refreshTrigger} onRefresh={refresh} />}
                 {activeTab === 'electricity' && <ElectricityTab key={refreshTrigger} onRefresh={refresh} />}
                 {activeTab === 'expenses' && <ExpensesTab key={refreshTrigger} onRefresh={refresh} />}
@@ -59,24 +58,34 @@ const TabButton = ({ id, label, icon: Icon, active, onClick }: any) => (
 
 // --- 1. PAYMENTS TAB ---
 
-// Using React.FC to allow 'key' and other standard props
 const PaymentsTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
-    const [transactions, setTransactions] = useState(getTransactions());
-    const rooms = getRooms();
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [historyRoomId, setHistoryRoomId] = useState<string | null>(null);
 
-    const handleDelete = (id: string) => {
+    useEffect(() => {
+        const loadData = async () => {
+            const [txs, rs] = await Promise.all([getTransactions(), getRooms()]);
+            setTransactions(txs);
+            setRooms(rs);
+        };
+        loadData();
+    }, []);
+
+    const handleDelete = async (id: string) => {
         if(confirm("Are you sure you want to delete this transaction?")) {
-            deleteTransaction(id);
-            setTransactions(getTransactions());
+            await deleteTransaction(id);
+            const txs = await getTransactions();
+            setTransactions(txs);
             onRefresh();
         }
     };
 
-    const handlePay = (txId: string, method: 'LinePay' | 'Cash') => {
-        updateTransaction(txId, { status: 'Paid', paidDate: new Date().toISOString().split('T')[0], method });
-        setTransactions(getTransactions());
+    const handlePay = async (txId: string, method: 'LinePay' | 'Cash') => {
+        await updateTransaction(txId, { status: 'Paid', paidDate: new Date().toISOString().split('T')[0], method });
+        const txs = await getTransactions();
+        setTransactions(txs);
         onRefresh();
     };
 
@@ -152,7 +161,7 @@ const PaymentsTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
                     </tbody>
                 </table>
             </div>
-            {isManualModalOpen && <ManualPaymentModal onClose={() => { setIsManualModalOpen(false); setTransactions(getTransactions()); onRefresh(); }} />}
+            {isManualModalOpen && <ManualPaymentModal onClose={async () => { setIsManualModalOpen(false); const txs = await getTransactions(); setTransactions(txs); onRefresh(); }} />}
             {historyRoomId && <PaymentHistoryModal roomId={historyRoomId} onClose={() => setHistoryRoomId(null)} />}
         </div>
     );
@@ -160,24 +169,33 @@ const PaymentsTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
 
 // --- 2. ELECTRICITY TAB ---
 
-// Using React.FC to allow 'key' and other standard props
 const ElectricityTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
-    const rooms = getRooms();
-    const buildings = getBuildings();
-    const occupiedRooms = rooms.filter(r => r.status === 'Occupied');
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [buildings, setBuildings] = useState<Building[]>([]);
     const [readings, setReadings] = useState<{[key: string]: string}>({});
     const [rateModalOpen, setRateModalOpen] = useState(false);
     const [historyRoomId, setHistoryRoomId] = useState<string | null>(null);
+
+    useEffect(() => {
+        const loadData = async () => {
+            const [rs, bs] = await Promise.all([getRooms(), getBuildings()]);
+            setRooms(rs);
+            setBuildings(bs);
+        };
+        loadData();
+    }, []);
+
+    const occupiedRooms = rooms.filter(r => r.status === 'Occupied');
 
     const handleReadingChange = (roomId: string, val: string) => {
         setReadings(prev => ({...prev, [roomId]: val}));
     };
 
-    const handleSubmit = (roomId: string) => {
+    const handleSubmit = async (roomId: string) => {
         const val = parseFloat(readings[roomId]);
         if (!isNaN(val)) {
             try {
-                recordMeterReading(roomId, val, new Date().toISOString().split('T')[0]);
+                await recordMeterReading(roomId, val, new Date().toISOString().split('T')[0]);
                 onRefresh();
                 setReadings(prev => ({...prev, [roomId]: ''}));
                 alert('Bill Generated!');
@@ -206,7 +224,7 @@ const ElectricityTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {occupiedRooms.map(room => {
-                    const buildingName = buildings.find(b => b.id === room.buildingId)?.name;
+                    const buildingName = buildings.find(b => b.id === room.building_id)?.name;
                     return (
                         <div key={room.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 group relative">
                              <button onClick={() => setHistoryRoomId(room.id)} className="absolute top-4 right-4 text-slate-400 hover:text-brand-600">
@@ -249,18 +267,25 @@ const ElectricityTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
 
 // --- 3. EXPENSES TAB ---
 
-// Using React.FC to allow 'key' and other standard props
 const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
-    const [expenses, setExpenses] = useState(getExpenses());
+    const [expenses, setExpenses] = useState<Expense[]>([]);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [expenseForm, setExpenseForm] = useState({ category: 'Maintenance', amount: '', description: '', attachmentName: '', date: '' });
 
+    useEffect(() => {
+        const loadData = async () => {
+            const exs = await getExpenses();
+            setExpenses(exs);
+        };
+        loadData();
+    }, []);
+
     const resetForm = () => setExpenseForm({ category: 'Maintenance', amount: '', description: '', attachmentName: '', date: new Date().toISOString().split('T')[0] });
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (editingId) {
-            updateExpense(editingId, {
+            await updateExpense(editingId, {
                 category: expenseForm.category as any,
                 amount: Number(expenseForm.amount),
                 description: expenseForm.description,
@@ -268,7 +293,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
                 date: expenseForm.date
             });
         } else {
-            addExpense({
+            await addExpense({
                 category: expenseForm.category as any,
                 amount: Number(expenseForm.amount),
                 description: expenseForm.description,
@@ -279,7 +304,8 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
         setIsAdding(false);
         setEditingId(null);
         resetForm();
-        setExpenses(getExpenses());
+        const exs = await getExpenses();
+        setExpenses(exs);
         onRefresh();
     };
 
@@ -295,10 +321,11 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
         setIsAdding(true);
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if(confirm("Delete this expense?")) {
-            deleteExpense(id);
-            setExpenses(getExpenses());
+            await deleteExpense(id);
+            const exs = await getExpenses();
+            setExpenses(exs);
             onRefresh();
         }
     };
@@ -420,14 +447,13 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
 
 // --- 4. MACHINES TAB ---
 
-// Using React.FC to allow 'key' and other standard props
 const MachinesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
     const [amount, setAmount] = useState('');
     const [desc, setDesc] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-    const handleAdd = () => {
-        addTransaction({
+    const handleAdd = async () => {
+        await addTransaction({
             type: 'MachineIncome',
             amount: Number(amount),
             description: desc || 'Coin Laundry Collection',
@@ -481,12 +507,12 @@ const MachinesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
 // --- MODALS ---
 
 const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
-    const buildings = getBuildings();
-    const [selectedBuilding, setSelectedBuilding] = useState(buildings[0].id);
-    const rooms = getRooms().filter(r => r.buildingId === selectedBuilding);
+    const [buildings, setBuildings] = useState<Building[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [selectedBuilding, setSelectedBuilding] = useState<number | string>('');
     
     // Form State
-    const [roomId, setRoomId] = useState(rooms[0]?.id || '');
+    const [roomId, setRoomId] = useState('');
     const [type, setType] = useState('Rent');
     const [amount, setAmount] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -494,30 +520,44 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
     const [method, setMethod] = useState('Transfer');
     
     // Enhanced Rent Logic
-    const [paymentTermMonths, setPaymentTermMonths] = useState(1); // 1, 3, 6, 12
+    const [paymentTermMonths, setPaymentTermMonths] = useState(1);
     const [discount, setDiscount] = useState(0);
     const [periodStart, setPeriodStart] = useState(new Date().toISOString().split('T')[0]);
     
-    // Fetch base rent when room changes
     useEffect(() => {
-        if(roomId && type === 'Rent') {
-            const tenant = getTenantInRoom(roomId);
-            if(tenant && tenant.currentContract) {
-                 const monthlyRent = tenant.currentContract.rentAmount;
-                 const calculated = (monthlyRent * paymentTermMonths) - discount;
-                 setAmount(calculated.toString());
+        const loadBuildings = async () => {
+            const bs = await getBuildings();
+            setBuildings(bs);
+            if (bs.length > 0) setSelectedBuilding(bs[0].id);
+        };
+        loadBuildings();
+    }, []);
+
+    useEffect(() => {
+        const loadRooms = async () => {
+            if (selectedBuilding !== '') {
+                const rs = await getRooms(Number(selectedBuilding));
+                setRooms(rs);
+                if (rs.length > 0) setRoomId(rs[0].id);
             }
-        }
+        };
+        loadRooms();
+    }, [selectedBuilding]);
+
+    useEffect(() => {
+        const fetchBaseRent = async () => {
+            if(roomId && type === 'Rent') {
+                const tenant = await getTenantInRoom(roomId);
+                if(tenant && tenant.currentContract) {
+                     const monthlyRent = tenant.currentContract.rentAmount;
+                     const calculated = (monthlyRent * paymentTermMonths) - discount;
+                     setAmount(calculated.toString());
+                }
+            }
+        };
+        fetchBaseRent();
     }, [roomId, paymentTermMonths, discount, type]);
 
-    // Update roomId if buildings change and current room is invalid
-    useEffect(() => {
-        if (!rooms.find(r => r.id === roomId)) {
-            setRoomId(rooms[0]?.id || '');
-        }
-    }, [rooms]);
-
-    // Calculate Period End
     const getPeriodEnd = (start: string, months: number) => {
         const d = new Date(start);
         d.setMonth(d.getMonth() + months);
@@ -525,21 +565,21 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
         return d.toISOString().split('T')[0];
     };
 
-    const handleSubmit = () => {
-        const tenant = getTenantInRoom(roomId);
+    const handleSubmit = async () => {
+        const tenant = await getTenantInRoom(roomId);
         const tenantName = tenant?.name || 'Unknown';
         const contractId = tenant?.currentContract?.id;
 
         const periodEnd = type === 'Rent' ? getPeriodEnd(periodStart, paymentTermMonths) : undefined;
         const finalNote = type === 'Rent' && discount > 0 ? `${note} (Includes NT$${discount} discount)`.trim() : note;
 
-        addTransaction({
+        await addTransaction({
             roomId: roomId,
             tenantName: tenantName, 
             contractId: contractId,
             type: type as any,
             amount: Number(amount),
-            dueDate: date, // For manual payment, due date = payment date usually
+            dueDate: date,
             status: 'Paid',
             paidDate: date,
             method: method as any,
@@ -594,7 +634,6 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
                         </div>
                     </div>
 
-                    {/* Rent Specific Logic */}
                     {type === 'Rent' && (
                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
                              <div>
@@ -679,8 +718,16 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
 };
 
 export const PaymentHistoryModal = ({ roomId, onClose }: { roomId: string, onClose: () => void }) => {
-    const txs = getTransactionsByRoom(roomId).filter(t => t.type === 'Rent');
-    // Prepare Chart Data
+    const [txs, setTxs] = useState<Transaction[]>([]);
+
+    useEffect(() => {
+        const loadHistory = async () => {
+            const history = await getTransactionsByRoom(roomId);
+            setTxs(history.filter(t => t.type === 'Rent'));
+        };
+        loadHistory();
+    }, [roomId]);
+
     const data = txs.map(t => ({
         date: t.dueDate,
         amount: t.amount,
@@ -742,15 +789,25 @@ export const PaymentHistoryModal = ({ roomId, onClose }: { roomId: string, onClo
 };
 
 export const ElectricityHistoryModal = ({ roomId, onClose, onRefresh }: { roomId: string, onClose: () => void, onRefresh: () => void }) => {
-    const txs = getTransactionsByRoom(roomId).filter(t => t.type === 'Electricity');
+    const [txs, setTxs] = useState<Transaction[]>([]);
     const [editingTxId, setEditingTxId] = useState<string | null>(null);
     const [editReading, setEditReading] = useState('');
 
-    const handleSaveReading = (txId: string) => {
+    useEffect(() => {
+        const loadHistory = async () => {
+            const history = await getTransactionsByRoom(roomId);
+            setTxs(history.filter(t => t.type === 'Electricity'));
+        };
+        loadHistory();
+    }, [roomId]);
+
+    const handleSaveReading = async (txId: string) => {
         const val = Number(editReading);
         if(!isNaN(val)) {
-            updateTransaction(txId, { readingEnd: val, description: `Reading Adjusted to ${val}` });
+            await updateTransaction(txId, { readingEnd: val, description: `Reading Adjusted to ${val}` });
             setEditingTxId(null);
+            const history = await getTransactionsByRoom(roomId);
+            setTxs(history.filter(t => t.type === 'Electricity'));
             onRefresh();
         }
     };
@@ -828,20 +885,31 @@ export const ElectricityHistoryModal = ({ roomId, onClose, onRefresh }: { roomId
 };
 
 const RateSettingsModal = ({ onClose }: { onClose: () => void }) => {
-    const [rates, setRates] = useState(getElectricityRates());
-    const rooms = getRooms();
+    const [rates, setRates] = useState<ElectricityRate[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
     const [newRate, setNewRate] = useState<{ date: string; rate: string; roomId: string | undefined }>({ date: '', rate: '', roomId: undefined });
 
-    const handleAdd = () => {
-        addElectricityRate({ effectiveDate: newRate.date, ratePerDegree: Number(newRate.rate), roomId: newRate.roomId });
-        setRates(getElectricityRates());
+    useEffect(() => {
+        const loadData = async () => {
+            const [rt, rs] = await Promise.all([getElectricityRates(), getRooms()]);
+            setRates(rt);
+            setRooms(rs);
+        };
+        loadData();
+    }, []);
+
+    const handleAdd = async () => {
+        await addElectricityRate({ effectiveDate: newRate.date, ratePerDegree: Number(newRate.rate), roomId: newRate.roomId });
+        const rt = await getElectricityRates();
+        setRates(rt);
         setNewRate({ date: '', rate: '', roomId: undefined });
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string | number) => {
         if(confirm("Delete this rate setting?")) {
-            deleteElectricityRate(id);
-            setRates(getElectricityRates());
+            await deleteElectricityRate(id);
+            const rt = await getElectricityRates();
+            setRates(rt);
         }
     };
 

@@ -16,6 +16,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeView }) 
         { id: 'tenants', label: 'Tenants & Contracts', icon: Users },
         { id: 'rooms', label: 'Buildings & Rooms', icon: Home },
         { id: 'ai-assistant', label: 'AI Assistant', icon: MessageSquareText },
+        { id: 'settings', label: 'System Settings', icon: Settings },
     ];
 
     return (
