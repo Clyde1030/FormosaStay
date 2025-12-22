@@ -4,6 +4,8 @@ from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
+from app.schemas.tenant import TenantCreate
+
 
 class LeaseAssetCreate(BaseModel):
     asset_type: str = Field(..., description="Type of asset: 'key', 'fob', or 'controller'")
@@ -28,8 +30,14 @@ class LeaseAssetResponse(BaseModel):
 
 
 class LeaseCreate(BaseModel):
-    """Schema for creating a new lease contract"""
-    tenant_id: int = Field(..., description="ID of the tenant")
+    """Schema for creating a new lease contract
+    
+    Either tenant_id or tenant_data must be provided.
+    If tenant_id is provided, tenant_data can be used to update tenant information.
+    If only tenant_data is provided, tenant will be found by personal_id or created if not found.
+    """
+    tenant_id: Optional[int] = Field(None, description="ID of existing tenant (optional if tenant_data is provided)")
+    tenant_data: Optional[TenantCreate] = Field(None, description="Tenant information for creating/updating tenant")
     room_id: int = Field(..., description="ID of the room")
     start_date: date = Field(..., description="Lease start date")
     end_date: date = Field(..., description="Lease end date")
@@ -40,7 +48,12 @@ class LeaseCreate(BaseModel):
     assets: Optional[List[LeaseAssetCreate]] = Field(default=[], description="Assets associated with the lease")
 
     @model_validator(mode="after")
-    def validate_dates(self):
+    def validate_tenant_and_dates(self):
+        # Validate that at least one tenant identifier is provided
+        if not self.tenant_id and not self.tenant_data:
+            raise ValueError("Either tenant_id or tenant_data must be provided")
+        
+        # Validate dates
         if self.end_date <= self.start_date:
             raise ValueError("end_date must be after start_date")
         return self
@@ -66,6 +79,15 @@ class LeaseTerminate(BaseModel):
     """Schema for terminating a lease contract"""
     termination_date: date = Field(..., description="Date when the lease is terminated")
     reason: Optional[str] = Field(None, description="Reason for termination")
+    meter_reading_date: Optional[date] = Field(
+        None, 
+        description="Date of meter reading (defaults to termination_date if not provided)"
+    )
+    meter_reading: Optional[float] = Field(
+        None,
+        ge=0,
+        description="Final meter reading amount (kWh). If provided, will calculate prorated electricity bill."
+    )
 
     @field_validator("termination_date")
     @classmethod
