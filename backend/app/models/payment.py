@@ -1,6 +1,7 @@
 # app/models/payment.py
 from sqlalchemy import Column, BigInteger, Date, Numeric, String, ForeignKey, Index, CheckConstraint
 from app.models.base import Base, AuditMixin
+from sqlalchemy.orm import relationship
 
 
 class Payment(Base, AuditMixin):

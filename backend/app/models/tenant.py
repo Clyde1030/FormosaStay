@@ -27,12 +27,18 @@ class TenantEmergencyContact(Base):
     __tablename__ = "tenant_emergency_contact"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    tenant_id = Column(BigInteger, ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(
+        BigInteger,
+        ForeignKey("tenant.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
     first_name = Column(Text, nullable=False)
     last_name = Column(Text, nullable=False)
-    relationship = Column(Text, nullable=False)
+    relation = Column(Text, nullable=False)  # ✅ renamed
     phone = Column(Text, nullable=False)
 
     # Relationships
     tenant = relationship("Tenant", back_populates="emergency_contacts")
+
 
