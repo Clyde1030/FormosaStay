@@ -47,13 +47,25 @@ RESTful API backend for FormosaStay rental management system.
 
 ### Running the Server
 
+**Easiest way** (recommended):
 ```bash
-# Using the run script
-python run.py
-
-# Or directly with uvicorn
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+./run.sh
 ```
+
+**Alternative methods**:
+
+```bash
+# Using uv directly
+uv run python run.py
+# OR
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# If you used pip/venv, activate your virtual environment first, then:
+python run.py
+# Or: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+The `run.py` script will automatically detect if you're using `uv` and run accordingly.
 
 The API will be available at:
 - API: http://localhost:8000
@@ -66,6 +78,19 @@ The API will be available at:
 - `GET /health` - Basic health check
 - `GET /health/db` - Database health check
 
+### Buildings
+- `GET /buildings/` - List all buildings
+- `GET /buildings/{id}` - Get building by ID
+
+### Rooms
+- `GET /rooms/` - List rooms (with optional `building_id` filter)
+- `GET /rooms/{id}` - Get room by ID
+
+### Tenants
+- `GET /tenants/` - List tenants
+- `GET /tenants/{id}` - Get tenant by ID
+- `POST /tenants/` - Create new tenant
+
 ### Leases (Contracts)
 - `POST /leases/` - Create a new lease contract
 - `GET /leases/{lease_id}` - Get a lease by ID
@@ -73,8 +98,8 @@ The API will be available at:
 - `POST /leases/{lease_id}/renew` - Renew an existing lease
 - `POST /leases/{lease_id}/terminate` - Terminate a lease
 
-### Rooms
-- `GET /rooms` - List rooms (placeholder)
+### Dashboard
+- `GET /dashboard/stats` - Get dashboard statistics
 
 ## Project Structure
 
@@ -91,15 +116,23 @@ backend/
 │   │   ├── building.py
 │   │   ├── room.py
 │   │   ├── tenant.py
-│   │   └── lease.py
+│   │   ├── lease.py
+│   │   ├── electricity.py
+│   │   └── payment.py
 │   ├── schemas/             # Pydantic schemas
-│   │   └── lease.py
+│   │   ├── lease.py
+│   │   ├── tenant.py
+│   │   └── electricity.py
 │   ├── services/            # Business logic layer
-│   │   └── lease_service.py
+│   │   ├── lease_service.py
+│   │   └── electricity_service.py
 │   └── routers/             # API route handlers
 │       ├── health.py
+│       ├── buildings.py
 │       ├── rooms.py
-│       └── leases.py
+│       ├── tenants.py
+│       ├── leases.py
+│       └── dashboard.py
 ├── run.py                   # Server run script
 ├── pyproject.toml          # Project dependencies
 └── README.md
@@ -112,7 +145,19 @@ backend/
 ```json
 POST /leases/
 {
-  "tenant_id": 1,
+  "tenant_data": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "gender": "M",
+    "birthday": "1990-01-01",
+    "personal_id": "A123456789",
+    "phone": "0912345678",
+    "email": "john@example.com",
+    "address": "123 Main St",
+    "emergency_contacts": [
+      {"first_name": "Jane", "last_name": "Doe", "relationship": "Spouse", "phone": "0987654321"}
+    ]
+  },
   "room_id": 1,
   "start_date": "2024-01-01",
   "end_date": "2024-12-31",
@@ -144,7 +189,9 @@ POST /leases/{lease_id}/renew
 POST /leases/{lease_id}/terminate
 {
   "termination_date": "2024-06-30",
-  "reason": "Tenant requested early termination"
+  "reason": "Tenant requested early termination",
+  "meter_reading_date": "2024-06-30",
+  "meter_reading": 1250.50
 }
 ```
 
@@ -157,7 +204,7 @@ POST /leases/{lease_id}/terminate
 uv sync --group dev
 
 # Run tests
-pytest
+uv run pytest
 ```
 
 ### Code Style
@@ -167,7 +214,26 @@ The project follows PEP 8 style guidelines. Consider using:
 - `ruff` or `flake8` for linting
 - `mypy` for type checking
 
+## Troubleshooting
+
+### ModuleNotFoundError: No module named 'uvicorn'
+
+If you installed dependencies with `uv`, you must use `uv run`:
+
+```bash
+# Wrong (uses system Python)
+python run.py
+
+# Correct (uses uv environment)
+uv run python run.py
+```
+
+### Database Connection Issues
+
+- Check your `.env` file has correct database credentials
+- Ensure PostgreSQL is running
+- Verify database exists and schema is created
+
 ## License
 
 [Add your license here]
-
