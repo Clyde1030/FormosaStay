@@ -17,7 +17,7 @@ class Payment(Base, AuditMixin):
     status = Column(String, nullable=False)  # 'unpaid', 'paid', 'partial', 'bad_debt'
 
     # Relationships
-    lease = relationship("Lease", backref="payments")
+    lease = relationship("Lease", back_populates="payments")
 
     __table_args__ = (
         CheckConstraint("category IN ('rent','electricity','penalty')", name="check_category"),

@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     AsyncSession,
 )
-from sqlalchemy.orm import declarative_base
 from typing import AsyncGenerator
 import logging
 

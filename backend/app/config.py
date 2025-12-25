@@ -57,7 +57,20 @@ class Settings(BaseSettings):
     @property
     def sync_database_url(self) -> str:
         """Returns the sync database URL, parsing from DATABASE_URL if provided."""
-        return self.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+        if not self.DATABASE_URL:
+            raise ValueError("DATABASE_URL must be provided for sync database connection")
+        
+        url = self.DATABASE_URL.strip()
+        
+        # Convert to psycopg format
+        if url.startswith('postgresql+asyncpg://'):
+            url = url.replace('postgresql+asyncpg://', 'postgresql+psycopg://', 1)
+        elif url.startswith('postgresql://'):
+            url = url.replace('postgresql://', 'postgresql+psycopg://', 1)
+        elif url.startswith('postgres://'):
+            url = url.replace('postgres://', 'postgresql+psycopg://', 1)
+        
+        return url
 
     # Check if SSL is required
     @property

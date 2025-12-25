@@ -70,8 +70,8 @@ class LeaseRenew(BaseModel):
     @field_validator("new_end_date")
     @classmethod
     def validate_new_end_date(cls, v: date) -> date:
-        if v <= date.today():
-            raise ValueError("new_end_date must be in the future")
+        # Note: Actual validation against current lease end_date is done in the service layer
+        # This just ensures it's a valid date
         return v
 
 
@@ -92,8 +92,8 @@ class LeaseTerminate(BaseModel):
     @field_validator("termination_date")
     @classmethod
     def validate_termination_date(cls, v: date) -> date:
-        if v < date.today():
-            raise ValueError("termination_date cannot be in the past")
+        # Note: Actual validation against lease start_date is done in the service layer
+        # This just ensures it's a valid date
         return v
 
 

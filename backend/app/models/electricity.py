@@ -15,8 +15,8 @@ class ElectricityRate(Base, AuditMixin):
     rate_per_kwh = Column(Numeric(10, 4), nullable=False)
 
     # Relationships
-    building = relationship("Building", backref="electricity_rates")
-    room = relationship("Room", backref="electricity_rates")
+    building = relationship("Building", back_populates="electricity_rates")
+    room = relationship("Room", back_populates="electricity_rates")
 
 
 class MeterReading(Base, AuditMixin):
@@ -28,7 +28,7 @@ class MeterReading(Base, AuditMixin):
     read_amount = Column(Numeric(10, 2), nullable=False)
 
     # Relationships
-    room = relationship("Room", backref="meter_readings")
+    room = relationship("Room", back_populates="meter_readings")
 
     __table_args__ = (
         Index("idx_meter_room_date", "room_id", "read_date"),
