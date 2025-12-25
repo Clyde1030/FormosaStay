@@ -49,6 +49,14 @@ export interface Room {
     created_at?: string;
 }
 
+export interface EmergencyContact {
+    id?: number;
+    first_name: string;
+    last_name: string;
+    relationship: string;
+    phone: string;
+}
+
 export interface Tenant {
     id: number;
     first_name: string;
@@ -66,6 +74,7 @@ export interface Tenant {
     address: string;
     homeAddress?: string;
     motorcyclePlate?: string;
+    emergency_contacts?: EmergencyContact[];
     created_at?: string;
 }
 
@@ -81,6 +90,7 @@ export interface Lease {
     pay_rent_on: number;
     payment_term: string;
     status: LeaseStatus | any;
+    vehicle_plate?: string;
     created_at?: string;
 }
 

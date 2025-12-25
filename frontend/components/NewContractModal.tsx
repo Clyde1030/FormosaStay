@@ -19,6 +19,7 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
         deposit: '',
         pay_rent_on: '1',
         payment_term: PaymentFrequency.MONTHLY,
+        vehicle_plate: '',
     });
     const [tenants, setTenants] = useState<Tenant[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,6 +59,7 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
                 deposit: parseFloat(formData.deposit),
                 pay_rent_on: parseInt(formData.pay_rent_on),
                 payment_term: formData.payment_term,
+                vehicle_plate: formData.vehicle_plate.trim() || undefined,
             };
 
             await createContract(contractData);
@@ -187,6 +189,17 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
                                 ))}
                             </select>
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Vehicle Plate</label>
+                        <input
+                            type="text"
+                            placeholder="e.g., ABC-1234"
+                            className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-brand-500 outline-none"
+                            value={formData.vehicle_plate}
+                            onChange={e => setFormData({...formData, vehicle_plate: e.target.value})}
+                        />
                     </div>
 
                     <div className="pt-4 flex gap-3">

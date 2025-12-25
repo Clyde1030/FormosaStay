@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap, Loader2 } from 'lucide-react';
-import { TenantWithContract, ContractStatus, PaymentFrequency, DepositStatus, Contract } from '../types';
+import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap, Loader2, Plus, Trash2, Users } from 'lucide-react';
+import { TenantWithContract, ContractStatus, PaymentFrequency, DepositStatus, Contract, EmergencyContact } from '../types';
 import { calculateProration, terminateContract, renewContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate } from '../services/propertyService';
 import NewContractModal from './NewContractModal';
 
@@ -15,7 +15,10 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     const [isEditing, setIsEditing] = useState(false);
     
     // Edit Form State
-    const [editTenant, setEditTenant] = useState({ ...tenant });
+    const [editTenant, setEditTenant] = useState({ 
+        ...tenant,
+        emergency_contacts: tenant.emergency_contacts ? [...tenant.emergency_contacts] : []
+    });
     const [editContract, setEditContract] = useState(tenant.currentContract ? { ...tenant.currentContract } : null);
 
     // Termination State
@@ -100,7 +103,8 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                 new_monthly_rent: renewRent,
                 new_deposit: oldContract.depositAmount,
                 new_pay_rent_on: oldContract.pay_rent_on || 1,
-                new_payment_term: paymentTermMap[renewFrequency] || renewFrequency.toLowerCase()
+                new_payment_term: paymentTermMap[renewFrequency] || renewFrequency.toLowerCase(),
+                new_vehicle_plate: renewVehiclePlate.trim() || undefined
             });
             
             onClose();
@@ -142,6 +146,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     const [renewEndDate, setRenewEndDate] = useState('');
     const [renewRent, setRenewRent] = useState(tenant.currentContract?.rentAmount || 0);
     const [renewFrequency, setRenewFrequency] = useState<PaymentFrequency>(tenant.currentContract?.paymentFrequency || PaymentFrequency.MONTHLY);
+    const [renewVehiclePlate, setRenewVehiclePlate] = useState(tenant.currentContract?.vehicle_plate || '');
 
     if (!tenant) return null;
 
@@ -242,6 +247,128 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                 </div>
                             </section>
 
+                            {/* Emergency Contacts */}
+                            <section>
+                                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                                    <Users size={20} className="text-brand-500"/> Emergency Contacts
+                                </h3>
+                                {isEditing ? (
+                                    <div className="space-y-3">
+                                        {editTenant.emergency_contacts?.map((contact, index) => (
+                                            <div key={index} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs font-medium text-slate-600">Contact {index + 1}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const updated = [...(editTenant.emergency_contacts || [])];
+                                                            updated.splice(index, 1);
+                                                            setEditTenant({ ...editTenant, emergency_contacts: updated });
+                                                        }}
+                                                        className="text-red-500 hover:text-red-700"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-600 mb-1">Last Name (姓氏)</label>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                                            value={contact.last_name}
+                                                            onChange={e => {
+                                                                const updated = [...(editTenant.emergency_contacts || [])];
+                                                                updated[index].last_name = e.target.value;
+                                                                setEditTenant({ ...editTenant, emergency_contacts: updated });
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-600 mb-1">First Name (名字)</label>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                                            value={contact.first_name}
+                                                            onChange={e => {
+                                                                const updated = [...(editTenant.emergency_contacts || [])];
+                                                                updated[index].first_name = e.target.value;
+                                                                setEditTenant({ ...editTenant, emergency_contacts: updated });
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-600 mb-1">Relationship</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="e.g., 父親, 母親, 朋友"
+                                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                                            value={contact.relationship}
+                                                            onChange={e => {
+                                                                const updated = [...(editTenant.emergency_contacts || [])];
+                                                                updated[index].relationship = e.target.value;
+                                                                setEditTenant({ ...editTenant, emergency_contacts: updated });
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                                            value={contact.phone}
+                                                            onChange={e => {
+                                                                const updated = [...(editTenant.emergency_contacts || [])];
+                                                                updated[index].phone = e.target.value;
+                                                                setEditTenant({ ...editTenant, emergency_contacts: updated });
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEditTenant({
+                                                    ...editTenant,
+                                                    emergency_contacts: [...(editTenant.emergency_contacts || []), { first_name: '', last_name: '', relationship: '', phone: '' }]
+                                                });
+                                            }}
+                                            className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700 font-medium"
+                                        >
+                                            <Plus size={16} />
+                                            Add Contact
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                        {tenant.emergency_contacts && tenant.emergency_contacts.length > 0 ? (
+                                            <div className="space-y-3">
+                                                {tenant.emergency_contacts.map((contact, index) => (
+                                                    <div key={contact.id || index} className="bg-white p-3 rounded-lg border border-slate-200">
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className="font-medium text-slate-800">{contact.last_name}{contact.first_name}</p>
+                                                                <p className="text-xs text-slate-500 mt-1">{contact.relationship}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-slate-600">
+                                                                <Phone size={14} />
+                                                                <span className="text-sm">{contact.phone}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-slate-400 italic text-sm">No emergency contacts on file</p>
+                                        )}
+                                    </div>
+                                )}
+                            </section>
+
                             {/* Contract Info */}
                             <section>
                                 <div className="flex items-center justify-between mb-4">
@@ -304,6 +431,19 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                                     </select>
                                                 ) : (
                                                     <div className="font-medium">{tenant.currentContract.paymentFrequency}</div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-slate-400">Vehicle Plate</label>
+                                                {isEditing && editContract ? (
+                                                    <input 
+                                                        className="w-full border rounded px-1 text-sm py-1" 
+                                                        value={editContract.vehicle_plate || ''} 
+                                                        onChange={e => setEditContract({...editContract, vehicle_plate: e.target.value})}
+                                                        placeholder="e.g., ABC-1234"
+                                                    />
+                                                ) : (
+                                                    <div className="font-medium">{tenant.currentContract.vehicle_plate || 'N/A'}</div>
                                                 )}
                                             </div>
                                             <div>
@@ -529,6 +669,16 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                         <option key={f} value={f}>{f}</option>
                                     ))}
                                  </select>
+                             </div>
+                             <div>
+                                 <label className="block text-sm font-medium text-brand-900 mb-1">Vehicle Plate</label>
+                                 <input 
+                                    type="text"
+                                    placeholder="e.g., ABC-1234"
+                                    className="w-full border border-brand-200 rounded-lg p-2"
+                                    value={renewVehiclePlate}
+                                    onChange={e => setRenewVehiclePlate(e.target.value)}
+                                 />
                              </div>
 
                              <div className="col-span-2 flex gap-3 pt-4">

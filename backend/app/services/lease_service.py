@@ -206,6 +206,7 @@ class LeaseService:
             deposit=lease_data.deposit,
             pay_rent_on=lease_data.pay_rent_on,
             payment_term=lease_data.payment_term,
+            vehicle_plate=lease_data.vehicle_plate,
             status="active",
             created_by=created_by,
         )
@@ -288,6 +289,8 @@ class LeaseService:
             lease.pay_rent_on = renew_data.new_pay_rent_on
         if renew_data.new_payment_term is not None:
             lease.payment_term = renew_data.new_payment_term
+        if renew_data.new_vehicle_plate is not None:
+            lease.vehicle_plate = renew_data.new_vehicle_plate
         lease.updated_by = updated_by
 
         await db.commit()

@@ -20,6 +20,7 @@ class Lease(Base, AuditMixin):
     pay_rent_on = Column(SmallInteger, nullable=False)  # 1-31
     payment_term = Column(String, nullable=False)
     status = Column(String, nullable=False)  # 'active', 'terminated', 'expired'
+    vehicle_plate = Column(String, nullable=True)  # Vehicle/motorcycle plate number
 
     # Relationships
     tenant = relationship("Tenant", back_populates="leases")

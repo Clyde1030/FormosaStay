@@ -45,6 +45,7 @@ class LeaseCreate(BaseModel):
     deposit: Decimal = Field(..., ge=0, description="Security deposit amount")
     pay_rent_on: int = Field(..., ge=1, le=31, description="Day of month when rent is due (1-31)")
     payment_term: str = Field(..., description="Payment term (e.g., 'monthly', 'quarterly')")
+    vehicle_plate: Optional[str] = Field(None, description="Vehicle/motorcycle plate number")
     assets: Optional[List[LeaseAssetCreate]] = Field(default=[], description="Assets associated with the lease")
 
     @model_validator(mode="after")
@@ -66,6 +67,7 @@ class LeaseRenew(BaseModel):
     new_deposit: Optional[Decimal] = Field(None, ge=0, description="New deposit amount (optional)")
     new_pay_rent_on: Optional[int] = Field(None, ge=1, le=31, description="New rent due day (optional)")
     new_payment_term: Optional[str] = Field(None, description="New payment term (optional)")
+    new_vehicle_plate: Optional[str] = Field(None, description="New vehicle/motorcycle plate number (optional)")
 
     @field_validator("new_end_date")
     @classmethod
@@ -110,6 +112,7 @@ class LeaseResponse(BaseModel):
     pay_rent_on: int
     payment_term: str
     status: str
+    vehicle_plate: Optional[str] = None
     assets: List[LeaseAssetResponse] = []
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

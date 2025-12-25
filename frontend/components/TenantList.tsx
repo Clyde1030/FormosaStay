@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, FileText, UserPlus, Loader2 } from 'lucide-react';
-import { fetchTenantsWithDetails, getTenantInRoom } from '../services/propertyService';
+import { fetchTenantsWithDetails, getTenantInRoom, getTenantById } from '../services/propertyService';
 import { TenantWithLease, TenantWithContract } from '../types';
 import NewTenantModal from './NewTenantModal';
 import TenantDetailModal from './TenantDetailModal';
@@ -86,23 +86,41 @@ const TenantList: React.FC = () => {
                                     onClick={async () => {
                                         // Load full tenant details with contract info
                                         try {
-                                            const tenantDetails = await getTenantInRoom(t.room?.id || '');
-                                            if (tenantDetails) {
-                                                setSelectedTenant(tenantDetails);
+                                            if (t.room?.id) {
+                                                // Tenant has a room, fetch via room
+                                                const tenantDetails = await getTenantInRoom(t.room.id);
+                                                if (tenantDetails) {
+                                                    setSelectedTenant(tenantDetails);
+                                                } else {
+                                                    // Fallback: fetch by tenant ID
+                                                    const tenantDetailsById = await getTenantById(t.id);
+                                                    if (tenantDetailsById) {
+                                                        setSelectedTenant(tenantDetailsById);
+                                                    }
+                                                }
                                             } else {
-                                                // If no room, create a basic tenant object
-                                                setSelectedTenant({
-                                                    ...t,
-                                                    currentContract: undefined,
-                                                    room: t.room
-                                                } as TenantWithContract);
+                                                // Tenant has no room, fetch by tenant ID directly
+                                                const tenantDetails = await getTenantById(t.id);
+                                                if (tenantDetails) {
+                                                    setSelectedTenant(tenantDetails);
+                                                } else {
+                                                    // Fallback: use basic tenant info
+                                                    setSelectedTenant({
+                                                        ...t,
+                                                        currentContract: undefined,
+                                                        room: undefined,
+                                                        emergency_contacts: []
+                                                    } as TenantWithContract);
+                                                }
                                             }
                                         } catch (err) {
+                                            console.error('Error loading tenant details:', err);
                                             // Fallback: use basic tenant info
                                             setSelectedTenant({
                                                 ...t,
                                                 currentContract: undefined,
-                                                room: t.room
+                                                room: t.room,
+                                                emergency_contacts: []
                                             } as TenantWithContract);
                                         }
                                     }}

@@ -3,12 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from typing import List, Optional
+from typing import List
 
 from app.db.session import get_db
-from app.models.tenant import Tenant, TenantEmergencyContact
+from app.models.tenant import Tenant
 from app.models.lease import Lease
-from app.schemas.tenant import TenantCreate, TenantResponse
+from app.schemas.tenant import TenantCreate
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
@@ -131,5 +131,47 @@ async def create_tenant(
         "phone": tenant.phone,
         "email": tenant.email,
         "address": tenant.address,
+    }
+
+
+@router.put("/{tenant_id}", response_model=dict)
+async def update_tenant(
+    tenant_id: int,
+    tenant_data: TenantCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing tenant"""
+    from app.services.lease_service import LeaseService
+    
+    # Update tenant using the service method with tenant_id
+    updated_tenant = await LeaseService._create_or_update_tenant(
+        db, 
+        tenant_data, 
+        tenant_id=tenant_id,
+        created_by=None  # TODO: Get from auth context when auth is implemented
+    )
+    
+    # Reload with relationships
+    await db.refresh(updated_tenant, ["emergency_contacts"])
+    
+    return {
+        "id": updated_tenant.id,
+        "first_name": updated_tenant.first_name,
+        "last_name": updated_tenant.last_name,
+        "name": f"{updated_tenant.first_name} {updated_tenant.last_name}",
+        "personal_id": updated_tenant.personal_id,
+        "phone": updated_tenant.phone,
+        "email": updated_tenant.email,
+        "address": updated_tenant.address,
+        "emergency_contacts": [
+            {
+                "id": ec.id,
+                "first_name": ec.first_name,
+                "last_name": ec.last_name,
+                "relationship": ec.relationship,
+                "phone": ec.phone,
+            }
+            for ec in updated_tenant.emergency_contacts
+        ],
     }
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Plus, Trash2 } from 'lucide-react';
 import { createTenant } from '../services/propertyService';
+import { EmergencyContact } from '../types';
 
 interface Props {
     onClose: () => void;
@@ -19,6 +20,7 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         line_id: '',
         address: ''
     });
+    const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +40,13 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                 phone: formData.phone.trim(),
                 email: formData.email.trim() || undefined,
                 line_id: formData.line_id.trim() || undefined,
-                address: formData.address.trim()
+                address: formData.address.trim(),
+                emergency_contacts: emergencyContacts.map(ec => ({
+                    first_name: ec.first_name.trim(),
+                    last_name: ec.last_name.trim(),
+                    relationship: ec.relationship.trim(),
+                    phone: ec.phone.trim()
+                }))
             };
 
             await createTenant(tenantData);
@@ -170,6 +178,93 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                             value={formData.address} 
                             onChange={e => setFormData({...formData, address: e.target.value})} 
                         />
+                    </div>
+
+                    {/* Emergency Contacts Section */}
+                    <div className="border-t border-slate-200 pt-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="block text-sm font-medium text-slate-700">Emergency Contacts</label>
+                            <button
+                                type="button"
+                                onClick={() => setEmergencyContacts([...emergencyContacts, { first_name: '', last_name: '', relationship: '', phone: '' }])}
+                                className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700 font-medium"
+                            >
+                                <Plus size={16} />
+                                Add Contact
+                            </button>
+                        </div>
+                        
+                        {emergencyContacts.map((contact, index) => (
+                            <div key={index} className="mb-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-medium text-slate-600">Contact {index + 1}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEmergencyContacts(emergencyContacts.filter((_, i) => i !== index))}
+                                        className="text-red-500 hover:text-red-700"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Last Name (姓氏)</label>
+                                        <input
+                                            type="text"
+                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                            value={contact.last_name}
+                                            onChange={e => {
+                                                const updated = [...emergencyContacts];
+                                                updated[index].last_name = e.target.value;
+                                                setEmergencyContacts(updated);
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">First Name (名字)</label>
+                                        <input
+                                            type="text"
+                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                            value={contact.first_name}
+                                            onChange={e => {
+                                                const updated = [...emergencyContacts];
+                                                updated[index].first_name = e.target.value;
+                                                setEmergencyContacts(updated);
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Relationship</label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g., 父親, 母親, 朋友"
+                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                            value={contact.relationship}
+                                            onChange={e => {
+                                                const updated = [...emergencyContacts];
+                                                updated[index].relationship = e.target.value;
+                                                setEmergencyContacts(updated);
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
+                                        <input
+                                            type="text"
+                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                            value={contact.phone}
+                                            onChange={e => {
+                                                const updated = [...emergencyContacts];
+                                                updated[index].phone = e.target.value;
+                                                setEmergencyContacts(updated);
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
                     <div className="pt-4 flex gap-3">

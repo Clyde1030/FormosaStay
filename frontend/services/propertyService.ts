@@ -91,6 +91,40 @@ export const getTransactionsByRoom = async (roomId: any): Promise<Transaction[]>
     }
 };
 
+export const getTenantById = async (tenantId: number): Promise<TenantWithContract | null> => {
+    try {
+        const tenant = await apiClient.get<any>(`/tenants/${tenantId}`);
+        
+        return {
+            ...tenant,
+            name: tenant.name || `${tenant.last_name}${tenant.first_name}`,
+            phoneNumber: tenant.phoneNumber || tenant.phone,
+            idNumber: tenant.idNumber || tenant.personal_id,
+            homeAddress: tenant.homeAddress || tenant.address,
+            emergency_contacts: tenant.emergency_contacts || [],
+            currentContract: tenant.active_lease ? {
+                id: tenant.active_lease.id,
+                rentAmount: Number(tenant.active_lease.monthly_rent),
+                depositAmount: Number(tenant.active_lease.deposit),
+                itemsIssued: [],
+                paymentFrequency: 'monthly' as any,
+                depositStatus: 'Paid' as any,
+                startDate: tenant.active_lease.start_date,
+                endDate: tenant.active_lease.end_date,
+                status: tenant.active_lease.status,
+                vehicle_plate: tenant.active_lease.vehicle_plate
+            } : undefined,
+            room: tenant.active_lease?.room ? {
+                id: tenant.active_lease.room.id,
+                roomNumber: tenant.active_lease.room.roomNumber || `${tenant.active_lease.room.floor_no}${tenant.active_lease.room.room_no}`
+            } : undefined
+        };
+    } catch (error) {
+        console.error('Error fetching tenant by ID:', error);
+        return null;
+    }
+};
+
 export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract | null> => {
     try {
         const leases = await apiClient.get<any[]>('/leases/?room_id=' + roomId + '&status=active');
@@ -103,13 +137,19 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
         
         return {
             ...tenant,
+            name: tenant.name || `${tenant.last_name}${tenant.first_name}`,
+            phoneNumber: tenant.phoneNumber || tenant.phone,
+            idNumber: tenant.idNumber || tenant.personal_id,
+            homeAddress: tenant.homeAddress || tenant.address,
+            emergency_contacts: tenant.emergency_contacts || [],
             currentContract: {
                 ...activeLease,
                 rentAmount: Number(activeLease.monthly_rent),
                 depositAmount: Number(activeLease.deposit),
                 itemsIssued: activeLease.assets || [],
                 paymentFrequency: activeLease.payment_term,
-                depositStatus: 'Paid' as any
+                depositStatus: 'Paid' as any,
+                vehicle_plate: activeLease.vehicle_plate
             },
             room: {
                 id: activeLease.room_id,
@@ -194,9 +234,28 @@ export const createTenant = async (tenant: Partial<Tenant>) => {
     return data;
 };
 
-export const updateTenant = async (id: number, updates: any) => {
-    // TODO: Add PUT /tenants/{id} endpoint to backend
-    throw new Error('Not implemented - backend endpoint needed');
+export const updateTenant = async (id: number, updates: Partial<Tenant>) => {
+    // Map frontend fields to backend schema
+    const tenantData: any = {
+        first_name: updates.first_name || '',
+        last_name: updates.last_name || '',
+        gender: updates.gender || 'M',
+        birthday: updates.birthday || '',
+        personal_id: updates.personal_id || updates.idNumber || '',
+        phone: updates.phone || updates.phoneNumber || '',
+        email: updates.email || undefined,
+        line_id: updates.line_id || updates.lineId || undefined,
+        address: updates.address || updates.homeAddress || '',
+        emergency_contacts: updates.emergency_contacts?.map(ec => ({
+            first_name: ec.first_name,
+            last_name: ec.last_name,
+            relationship: ec.relationship,
+            phone: ec.phone
+        })) || []
+    };
+    
+    const data = await apiClient.put<any>(`/tenants/${id}`, tenantData);
+    return data;
 };
 
 export const recordMeterReading = async (roomId: any, read_amount: number, read_date: string) => {
@@ -249,6 +308,7 @@ export const renewContract = async (leaseId: number, renewData: {
     new_deposit?: number;
     new_pay_rent_on?: number;
     new_payment_term?: string;
+    new_vehicle_plate?: string;
 }) => {
     const data = await apiClient.post<any>(`/leases/${leaseId}/renew`, renewData);
     return data;
@@ -263,6 +323,7 @@ export const createContract = async (contract: {
     deposit: number;
     pay_rent_on: number;
     payment_term: string;
+    vehicle_plate?: string;
     assets?: Array<{ asset_type: string; quantity: number }>;
 }) => {
     // Map payment_term from UI format to backend format
@@ -282,6 +343,7 @@ export const createContract = async (contract: {
         deposit: contract.deposit,
         pay_rent_on: contract.pay_rent_on,
         payment_term: paymentTermMap[contract.payment_term] || contract.payment_term.toLowerCase(),
+        vehicle_plate: contract.vehicle_plate || undefined,
         assets: contract.assets || []
     };
     

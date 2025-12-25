@@ -113,6 +113,7 @@ CREATE TABLE lease (
 
     payment_term TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('active','terminated','expired')),
+    vehicle_plate TEXT,
 
     created_by BIGINT REFERENCES user_account(id),
     updated_by BIGINT REFERENCES user_account(id),
