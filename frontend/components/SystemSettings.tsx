@@ -1,21 +1,29 @@
 
 import React, { useState, useEffect } from 'react';
-import { Database, Shield, Server, Copy, Check, Download, Code, Github, RefreshCw, ExternalLink, Link } from 'lucide-react';
-import { checkSupabaseConnection } from '../services/supabaseClient';
+import { Database, Shield, Server, Copy, Check, Download, Code, Github, RefreshCw } from 'lucide-react';
+import { apiClient } from '../services/apiClient';
 
 const SystemSettings: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'schema' | 'config' | 'supabase'>('supabase');
+    const [activeTab, setActiveTab] = useState<'schema' | 'config' | 'database'>('database');
     const [copied, setCopied] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncSuccess, setSyncSuccess] = useState(false);
     const [isDbConnected, setIsDbConnected] = useState<boolean | null>(null);
+    const [dbInfo, setDbInfo] = useState<any>(null);
+
+    const checkDatabaseConnection = async () => {
+        try {
+            const info = await apiClient.get('/health/db');
+            setIsDbConnected(true);
+            setDbInfo(info);
+        } catch (error) {
+            setIsDbConnected(false);
+            setDbInfo(null);
+        }
+    };
 
     useEffect(() => {
-        const testConn = async () => {
-            const connected = await checkSupabaseConnection();
-            setIsDbConnected(connected);
-        };
-        testConn();
+        checkDatabaseConnection();
     }, []);
 
     const postgresSchema = `# Security & Roles
@@ -383,16 +391,16 @@ EXECUTE FUNCTION enforce_room_building_match();`;
 
             <div className="flex space-x-2 border-b border-slate-200 overflow-x-auto">
                 <button 
-                    onClick={() => setActiveTab('supabase')}
-                    className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'supabase' ? 'border-brand-500 text-brand-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    onClick={() => setActiveTab('database')}
+                    className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'database' ? 'border-brand-500 text-brand-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
-                    <Link size={18} /> Supabase Project
+                    <Database size={18} /> Database Connection
                 </button>
                 <button 
                     onClick={() => setActiveTab('schema')}
                     className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'schema' ? 'border-brand-500 text-brand-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                 >
-                    <Database size={18} /> Postgres Schema
+                    <Code size={18} /> Postgres Schema
                 </button>
                 <button 
                     onClick={() => setActiveTab('config')}
@@ -403,7 +411,7 @@ EXECUTE FUNCTION enforce_room_building_match();`;
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 min-h-[500px]">
-                {activeTab === 'supabase' && (
+                {activeTab === 'database' && (
                     <div className="p-8">
                         <div className="max-w-3xl mx-auto space-y-8">
                             <div className="flex items-center justify-between">
@@ -412,7 +420,7 @@ EXECUTE FUNCTION enforce_room_building_match();`;
                                         <Database size={32} />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-bold text-slate-800">Supabase Connection</h3>
+                                        <h3 className="text-xl font-bold text-slate-800">PostgreSQL Database Connection</h3>
                                         <div className="flex items-center gap-2 mt-1">
                                             {isDbConnected === null ? (
                                                 <RefreshCw size={14} className="animate-spin text-slate-400" />
@@ -420,64 +428,73 @@ EXECUTE FUNCTION enforce_room_building_match();`;
                                                 <div className={`w-2 h-2 rounded-full ${isDbConnected ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
                                             )}
                                             <span className="text-sm text-slate-500">
-                                                {isDbConnected === null ? 'Checking connection...' : (isDbConnected ? 'Connected to Project' : 'Connection failed - Setup required')}
+                                                {isDbConnected === null ? 'Checking connection...' : (isDbConnected ? 'Connected to Database' : 'Connection failed')}
                                             </span>
                                         </div>
                                     </div>
                                 </div>
-                                <a 
-                                    href="https://supabase.com/dashboard/project/huodcetrwapdedipjehg" 
-                                    target="_blank" 
-                                    rel="noreferrer"
+                                <button 
+                                    onClick={checkDatabaseConnection}
                                     className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
                                 >
-                                    Open Dashboard <ExternalLink size={14} />
-                                </a>
+                                    <RefreshCw size={14} /> Refresh
+                                </button>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
-                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Project Details</h4>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="text-[10px] text-slate-400 block mb-0.5">Project ID</label>
-                                            <code className="text-sm font-mono text-slate-700">huodcetrwapdedipjehg</code>
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] text-slate-400 block mb-0.5">Project URL</label>
-                                            <code className="text-xs font-mono text-slate-600 break-all">https://huodcetrwapdedipjehg.supabase.co</code>
+                            {isDbConnected && dbInfo && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Database Info</h4>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="text-[10px] text-slate-400 block mb-0.5">PostgreSQL Version</label>
+                                                <code className="text-sm font-mono text-slate-700">{dbInfo.postgresql_version || 'Unknown'}</code>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-slate-400 block mb-0.5">Tables Count</label>
+                                                <code className="text-sm font-mono text-slate-700">{dbInfo.tables_count || 0}</code>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-slate-400 block mb-0.5">Status</label>
+                                                <span className="text-sm font-medium text-emerald-600">{dbInfo.status || 'ok'}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="p-6 bg-brand-50 border border-brand-100 rounded-xl space-y-4">
-                                    <h4 className="text-xs font-bold text-brand-600 uppercase tracking-wider">Action Items</h4>
-                                    <ul className="text-sm text-brand-800 space-y-2">
-                                        <li className="flex items-start gap-2">
-                                            <Check size={16} className="shrink-0 mt-0.5" />
-                                            <span>Copy the SQL from the <strong>Schema</strong> tab.</span>
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                            <Check size={16} className="shrink-0 mt-0.5" />
-                                            <span>Run it in the <strong>SQL Editor</strong> on Supabase.</span>
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                            <Check size={16} className="shrink-0 mt-0.5" />
-                                            <span>The app will automatically sync with your tables.</span>
-                                        </li>
-                                    </ul>
+                                    <div className="p-6 bg-brand-50 border border-brand-100 rounded-xl space-y-4">
+                                        <h4 className="text-xs font-bold text-brand-600 uppercase tracking-wider">Connection Details</h4>
+                                        <ul className="text-sm text-brand-800 space-y-2">
+                                            <li className="flex items-start gap-2">
+                                                <Check size={16} className="shrink-0 mt-0.5" />
+                                                <span>Backend API is connected to local PostgreSQL.</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <Check size={16} className="shrink-0 mt-0.5" />
+                                                <span>Database connection is active and healthy.</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <Check size={16} className="shrink-0 mt-0.5" />
+                                                <span>All API endpoints are available for data operations.</span>
+                                            </li>
+                                        </ul>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             {!isDbConnected && isDbConnected !== null && (
                                 <div className="p-4 bg-red-50 border border-red-100 rounded-lg flex gap-3 items-start">
                                     <Shield className="text-red-500 shrink-0" size={20} />
                                     <div>
-                                        <p className="text-sm font-bold text-red-800">Connection Not Initialized</p>
+                                        <p className="text-sm font-bold text-red-800">Database Connection Failed</p>
                                         <p className="text-xs text-red-700 mt-1">
-                                            We couldn't detect the 'building' table in your Supabase project. 
-                                            Please run the SQL schema initialization in your project dashboard.
+                                            Unable to connect to the PostgreSQL database. Please check:
                                         </p>
+                                        <ul className="text-xs text-red-700 mt-2 list-disc list-inside space-y-1">
+                                            <li>Ensure PostgreSQL is running</li>
+                                            <li>Verify database connection settings in backend .env file</li>
+                                            <li>Check that the database exists and schema is initialized</li>
+                                            <li>Ensure the backend server is running</li>
+                                        </ul>
                                     </div>
                                 </div>
                             )}

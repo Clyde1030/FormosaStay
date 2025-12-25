@@ -3,11 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, FileText, UserPlus, Loader2 } from 'lucide-react';
 import { fetchTenantsWithDetails } from '../services/propertyService';
 import { TenantWithLease } from '../types';
+import NewTenantModal from './NewTenantModal';
 
 const TenantList: React.FC = () => {
     const [tenants, setTenants] = useState<TenantWithLease[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const loadTenants = async () => {
         setLoading(true);
@@ -35,9 +37,12 @@ const TenantList: React.FC = () => {
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">Tenants</h2>
-                    <p className="text-slate-500">Live data from Supabase tenant & lease tables.</p>
+                    <p className="text-slate-500">Live data from PostgreSQL tenant & lease tables.</p>
                 </div>
-                <button className="flex items-center justify-center bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors">
+                <button 
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center justify-center bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
+                >
                     <UserPlus size={18} className="mr-2" />
                     Add Tenant
                 </button>
@@ -108,6 +113,15 @@ const TenantList: React.FC = () => {
                     </table>
                 )}
             </div>
+
+            {isModalOpen && (
+                <NewTenantModal 
+                    onClose={() => setIsModalOpen(false)}
+                    onSuccess={() => {
+                        loadTenants();
+                    }}
+                />
+            )}
         </div>
     );
 };
