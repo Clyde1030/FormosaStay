@@ -5,6 +5,8 @@ from app.models.tenant import Tenant, TenantEmergencyContact
 from app.models.lease import Lease, LeaseAsset
 from app.models.electricity import ElectricityRate, MeterReading
 from app.models.payment import Payment
+from app.models.user import UserAccount, Role, UserRole
+from app.models.cash_flow import CashFlowCategory, CashAccount, CashFlow, CashFlowAttachment
 
 __all__ = [
     "Building",
@@ -16,5 +18,12 @@ __all__ = [
     "ElectricityRate",
     "MeterReading",
     "Payment",
+    "UserAccount",
+    "Role",
+    "UserRole",
+    "CashFlowCategory",
+    "CashAccount",
+    "CashFlow",
+    "CashFlowAttachment",
 ]
 

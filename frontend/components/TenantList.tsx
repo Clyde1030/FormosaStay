@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, FileText, UserPlus, Loader2 } from 'lucide-react';
-import { fetchTenantsWithDetails } from '../services/propertyService';
-import { TenantWithLease } from '../types';
+import { fetchTenantsWithDetails, getTenantInRoom } from '../services/propertyService';
+import { TenantWithLease, TenantWithContract } from '../types';
 import NewTenantModal from './NewTenantModal';
+import TenantDetailModal from './TenantDetailModal';
 
 const TenantList: React.FC = () => {
     const [tenants, setTenants] = useState<TenantWithLease[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedTenant, setSelectedTenant] = useState<TenantWithContract | null>(null);
 
     const loadTenants = async () => {
         setLoading(true);
@@ -28,7 +30,8 @@ const TenantList: React.FC = () => {
     }, []);
 
     const filteredTenants = tenants.filter(t => 
-        `${t.first_name} ${t.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        `${t.last_name}${t.first_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        `${t.last_name} ${t.first_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.room?.room_no?.includes(searchTerm)
     );
 
@@ -77,9 +80,35 @@ const TenantList: React.FC = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {filteredTenants.map(t => (
-                                <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                                <tr 
+                                    key={t.id} 
+                                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                                    onClick={async () => {
+                                        // Load full tenant details with contract info
+                                        try {
+                                            const tenantDetails = await getTenantInRoom(t.room?.id || '');
+                                            if (tenantDetails) {
+                                                setSelectedTenant(tenantDetails);
+                                            } else {
+                                                // If no room, create a basic tenant object
+                                                setSelectedTenant({
+                                                    ...t,
+                                                    currentContract: undefined,
+                                                    room: t.room
+                                                } as TenantWithContract);
+                                            }
+                                        } catch (err) {
+                                            // Fallback: use basic tenant info
+                                            setSelectedTenant({
+                                                ...t,
+                                                currentContract: undefined,
+                                                room: t.room
+                                            } as TenantWithContract);
+                                        }
+                                    }}
+                                >
                                     <td className="p-4">
-                                        <div className="font-bold text-slate-900">{t.first_name} {t.last_name}</div>
+                                        <div className="font-bold text-slate-900">{t.last_name}{t.first_name}</div>
                                         <div className="text-xs text-slate-400">{t.personal_id}</div>
                                     </td>
                                     <td className="p-4">
@@ -119,6 +148,16 @@ const TenantList: React.FC = () => {
                     onClose={() => setIsModalOpen(false)}
                     onSuccess={() => {
                         loadTenants();
+                    }}
+                />
+            )}
+
+            {selectedTenant && (
+                <TenantDetailModal
+                    tenant={selectedTenant}
+                    onClose={() => {
+                        setSelectedTenant(null);
+                        loadTenants(); // Refresh list after any changes
                     }}
                 />
             )}

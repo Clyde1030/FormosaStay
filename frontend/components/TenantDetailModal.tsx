@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap } from 'lucide-react';
+import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap, Loader2 } from 'lucide-react';
 import { TenantWithContract, ContractStatus, PaymentFrequency, DepositStatus, Contract } from '../types';
-import { calculateProration, terminateContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate } from '../services/propertyService';
+import { calculateProration, terminateContract, renewContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate } from '../services/propertyService';
+import NewContractModal from './NewContractModal';
 
 interface Props {
     tenant: TenantWithContract;
@@ -10,7 +11,7 @@ interface Props {
 }
 
 const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
-    const [view, setView] = useState<'details' | 'terminate' | 'renew'>('details');
+    const [view, setView] = useState<'details' | 'terminate' | 'renew' | 'create'>('details');
     const [isEditing, setIsEditing] = useState(false);
     
     // Edit Form State
@@ -25,6 +26,8 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     // Final Electricity State
     const [finalReading, setFinalReading] = useState<string>('');
     const [elecCost, setElecCost] = useState<number>(0);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     // Fixed currentRate derivation to match synchronous getCurrentElectricityRate from propertyService
     const currentRate = tenant.room ? getCurrentElectricityRate(terminationDate, tenant.room.id) : 5.0;
 
@@ -48,33 +51,69 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     const handleTerminate = async () => {
         if (!tenant.currentContract || !tenant.room) return;
         
-        // 1. Record final meter reading if provided
-        if (finalReading) {
-            await recordMeterReading(tenant.room.id, parseFloat(finalReading), terminationDate);
+        setIsSubmitting(true);
+        setError(null);
+        
+        try {
+            const meterReading = finalReading ? parseFloat(finalReading) : undefined;
+            
+            await terminateContract(
+                tenant.currentContract.id,
+                terminationDate,
+                terminationReason,
+                terminationDate, // meter_reading_date
+                meterReading
+            );
+            
+            onClose();
+            // Trigger refresh in parent component if callback exists
+            if ((onClose as any).onSuccess) {
+                (onClose as any).onSuccess();
+            }
+        } catch (err: any) {
+            setError(err.message || 'Failed to terminate contract. Please try again.');
+            console.error('Error terminating contract:', err);
+        } finally {
+            setIsSubmitting(false);
         }
-
-        // 2. Terminate the contract
-        await terminateContract(tenant.currentContract.id, terminationDate, terminationReason);
-        onClose();
     };
 
     const handleRenew = async () => {
         if (!tenant.currentContract || !tenant.room) return;
-        const oldContract = tenant.currentContract;
         
-        // Fix: Map UI-friendly names back to database field names (tenant_id, room_id, etc.)
-        await createContract({
-            tenant_id: tenant.id,
-            room_id: tenant.room.id,
-            start_date: renewStartDate,
-            end_date: renewEndDate,
-            monthly_rent: renewRent,
-            payment_term: renewFrequency,
-            deposit: oldContract.depositAmount,
-            status: 'active',
-            pay_rent_on: oldContract.pay_rent_on || 1
-        });
-        onClose();
+        setIsSubmitting(true);
+        setError(null);
+        
+        try {
+            const oldContract = tenant.currentContract;
+            
+            // Map PaymentFrequency to backend format
+            const paymentTermMap: { [key: string]: string } = {
+                'Monthly': 'monthly',
+                'Quarterly': 'quarterly',
+                'Semiannually': 'semiannually',
+                'Yearly': 'yearly'
+            };
+            
+            await renewContract(tenant.currentContract.id, {
+                new_end_date: renewEndDate,
+                new_monthly_rent: renewRent,
+                new_deposit: oldContract.depositAmount,
+                new_pay_rent_on: oldContract.pay_rent_on || 1,
+                new_payment_term: paymentTermMap[renewFrequency] || renewFrequency.toLowerCase()
+            });
+            
+            onClose();
+            // Trigger refresh in parent component if callback exists
+            if ((onClose as any).onSuccess) {
+                (onClose as any).onSuccess();
+            }
+        } catch (err: any) {
+            setError(err.message || 'Failed to renew contract. Please try again.');
+            console.error('Error renewing contract:', err);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleSaveEdits = async () => {
@@ -311,7 +350,12 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                 ) : (
                                     <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-500">
                                         No active contract found.
-                                        <button className="block mx-auto mt-2 text-brand-600 font-medium hover:underline">Create Contract</button>
+                                        <button 
+                                            onClick={() => setView('create')}
+                                            className="block mx-auto mt-2 text-brand-600 font-medium hover:underline"
+                                        >
+                                            Create Contract
+                                        </button>
                                     </div>
                                 )}
                             </section>
@@ -321,6 +365,11 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                     {/* View: Terminate */}
                     {view === 'terminate' && tenant.currentContract && (
                         <div className="space-y-6">
+                            {error && (
+                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                                    {error}
+                                </div>
+                            )}
                             <div className="bg-red-50 border border-red-100 rounded-xl p-6 space-y-6">
                                 <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
                                     <AlertTriangle className="text-red-600"/> Early Termination Settlement
@@ -407,10 +456,18 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
 
                             <div className="flex gap-3 pt-4 sticky bottom-0 bg-white p-4 border-t border-slate-100">
                                 <button 
-                                    className="flex-1 bg-red-600 text-white py-3 rounded-xl hover:bg-red-700 font-bold transition-colors"
+                                    disabled={isSubmitting}
+                                    className="flex-1 bg-red-600 text-white py-3 rounded-xl hover:bg-red-700 font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     onClick={handleTerminate}
                                 >
-                                    Confirm Final Settlement
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 className="animate-spin" size={16} />
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        'Confirm Final Settlement'
+                                    )}
                                 </button>
                                 <button 
                                     className="px-6 py-3 border border-slate-300 bg-white rounded-xl hover:bg-slate-50 text-slate-600 font-medium"
@@ -428,6 +485,11 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                          <h3 className="text-lg font-bold text-brand-800 flex items-center gap-2">
                              <FilePlus className="text-brand-600"/> Renew Contract
                          </h3>
+                         {error && (
+                             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                                 {error}
+                             </div>
+                         )}
                          <div className="grid grid-cols-2 gap-4">
                              <div>
                                  <label className="block text-sm font-medium text-brand-900 mb-1">New Start Date</label>
@@ -471,10 +533,18 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
 
                              <div className="col-span-2 flex gap-3 pt-4">
                                  <button 
-                                     className="flex-1 bg-brand-600 text-white py-2 rounded-lg hover:bg-brand-700 font-medium"
+                                     disabled={isSubmitting}
+                                     className="flex-1 bg-brand-600 text-white py-2 rounded-lg hover:bg-brand-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                      onClick={handleRenew}
                                  >
-                                     Create Renewal Contract
+                                     {isSubmitting ? (
+                                         <>
+                                             <Loader2 className="animate-spin" size={16} />
+                                             Processing...
+                                         </>
+                                     ) : (
+                                         'Renew Contract'
+                                     )}
                                  </button>
                                  <button 
                                      className="px-4 py-2 border border-slate-300 bg-white rounded-lg hover:bg-slate-50"
@@ -485,6 +555,21 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                              </div>
                          </div>
                      </div>
+                    )}
+
+                    {/* View: Create Contract */}
+                    {view === 'create' && tenant.room && (
+                        <NewContractModal
+                            roomId={tenant.room.id}
+                            tenantId={tenant.id}
+                            onClose={() => setView('details')}
+                            onSuccess={() => {
+                                onClose();
+                                if ((onClose as any).onSuccess) {
+                                    (onClose as any).onSuccess();
+                                }
+                            }}
+                        />
                     )}
 
                 </div>

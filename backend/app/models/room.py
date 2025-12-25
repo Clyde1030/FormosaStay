@@ -18,4 +18,5 @@ class Room(Base, AuditMixin):
     leases = relationship("Lease", back_populates="room")
     electricity_rates = relationship("ElectricityRate", back_populates="room", cascade="all, delete-orphan")
     meter_readings = relationship("MeterReading", back_populates="room", cascade="all, delete-orphan")
+    cash_flows = relationship("CashFlow", back_populates="room")
 

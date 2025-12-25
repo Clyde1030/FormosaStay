@@ -26,6 +26,7 @@ class Lease(Base, AuditMixin):
     room = relationship("Room", back_populates="leases")
     assets = relationship("LeaseAsset", back_populates="lease", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="lease")  # No cascade - keep payments for audit even if lease is deleted
+    cash_flows = relationship("CashFlow", back_populates="lease")
 
     __table_args__ = (
         CheckConstraint("pay_rent_on BETWEEN 1 AND 31", name="check_pay_rent_on"),

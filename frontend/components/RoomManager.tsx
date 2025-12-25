@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { getBuildings, getRooms, getTenantInRoom, getTransactionsByRoom } from '../services/propertyService';
 import { Room, Building, TenantWithContract, Transaction } from '../types';
-import { User, Zap, DollarSign, X, ArrowRight, MapPin, Maximize } from 'lucide-react';
+import { User, Zap, DollarSign, X, ArrowRight, MapPin, Maximize, FilePlus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Area, Legend } from 'recharts';
 import TenantDetailModal from './TenantDetailModal';
+import NewContractModal from './NewContractModal';
 
 const RoomManager: React.FC = () => {
     const [buildings, setBuildings] = useState<Building[]>([]);
@@ -77,6 +78,7 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
     const [building, setBuilding] = useState<Building | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isTenantModalOpen, setIsTenantModalOpen] = useState(false);
+    const [isContractModalOpen, setIsContractModalOpen] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -183,8 +185,15 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">
-                             Currently Vacant
+                        <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-8 text-center">
+                            <p className="text-slate-500 mb-4">Currently Vacant</p>
+                            <button
+                                onClick={() => setIsContractModalOpen(true)}
+                                className="flex items-center gap-2 mx-auto px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+                            >
+                                <FilePlus size={18} />
+                                Create New Contract
+                            </button>
                         </div>
                     )}
 
@@ -236,6 +245,19 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                     <TenantDetailModal 
                         tenant={tenant} 
                         onClose={() => setIsTenantModalOpen(false)} 
+                    />
+                )}
+
+                {isContractModalOpen && room && (
+                    <NewContractModal
+                        roomId={room.id}
+                        onClose={() => setIsContractModalOpen(false)}
+                        onSuccess={async () => {
+                            // Reload tenant data after contract creation
+                            const t = await getTenantInRoom(roomId);
+                            setTenant(t);
+                            setIsContractModalOpen(false);
+                        }}
                     />
                 )}
             </div>

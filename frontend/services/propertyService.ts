@@ -35,7 +35,7 @@ export const getTenants = async (): Promise<Tenant[]> => {
     const data = await apiClient.get<any[]>('/tenants/');
     return data.map(t => ({
         ...t,
-        name: t.name || `${t.first_name} ${t.last_name}`,
+        name: t.name || `${t.last_name}${t.first_name}`,
         phoneNumber: t.phoneNumber || t.phone,
         idNumber: t.idNumber || t.personal_id,
         homeAddress: t.homeAddress || t.address
@@ -227,15 +227,65 @@ export const calculateProration = (rent: number, terminationDate: string, endDat
     return Math.round((daysUsed / daysInMonth) * rent);
 };
 
-export const terminateContract = async (contractId: number, date: string, reason: string) => {
-    await apiClient.post(`/leases/${contractId}/terminate`, {
-        termination_date: date,
-        reason: reason
+export const terminateContract = async (
+    contractId: number, 
+    terminationDate: string, 
+    reason: string,
+    meterReadingDate?: string,
+    meterReading?: number
+) => {
+    const data = await apiClient.post<any>(`/leases/${contractId}/terminate`, {
+        termination_date: terminationDate,
+        reason: reason || undefined,
+        meter_reading_date: meterReadingDate || terminationDate,
+        meter_reading: meterReading || undefined
     });
+    return data;
 };
 
-export const createContract = async (contract: any) => {
-    const data = await apiClient.post<any>('/leases/', contract);
+export const renewContract = async (leaseId: number, renewData: {
+    new_end_date: string;
+    new_monthly_rent?: number;
+    new_deposit?: number;
+    new_pay_rent_on?: number;
+    new_payment_term?: string;
+}) => {
+    const data = await apiClient.post<any>(`/leases/${leaseId}/renew`, renewData);
+    return data;
+};
+
+export const createContract = async (contract: {
+    tenant_id: number;
+    room_id: number;
+    start_date: string;
+    end_date: string;
+    monthly_rent: number;
+    deposit: number;
+    pay_rent_on: number;
+    payment_term: string;
+    assets?: Array<{ asset_type: string; quantity: number }>;
+}) => {
+    // Map payment_term from UI format to backend format
+    const paymentTermMap: { [key: string]: string } = {
+        'Monthly': 'monthly',
+        'Quarterly': 'quarterly',
+        'Semiannually': 'semiannually',
+        'Yearly': 'yearly'
+    };
+    
+    const contractData = {
+        tenant_id: contract.tenant_id,
+        room_id: contract.room_id,
+        start_date: contract.start_date,
+        end_date: contract.end_date,
+        monthly_rent: contract.monthly_rent,
+        deposit: contract.deposit,
+        pay_rent_on: contract.pay_rent_on,
+        payment_term: paymentTermMap[contract.payment_term] || contract.payment_term.toLowerCase(),
+        assets: contract.assets || []
+    };
+    
+    const data = await apiClient.post<any>('/leases/', contractData);
     return data;
 };
 

@@ -71,23 +71,23 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">First Name *</label>
-                            <input 
-                                required 
-                                type="text" 
-                                className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-brand-500 outline-none" 
-                                value={formData.first_name} 
-                                onChange={e => setFormData({...formData, first_name: e.target.value})} 
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Last Name *</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Last Name (姓氏) *</label>
                             <input 
                                 required 
                                 type="text" 
                                 className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-brand-500 outline-none" 
                                 value={formData.last_name} 
                                 onChange={e => setFormData({...formData, last_name: e.target.value})} 
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">First Name (名字) *</label>
+                            <input 
+                                required 
+                                type="text" 
+                                className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-brand-500 outline-none" 
+                                value={formData.first_name} 
+                                onChange={e => setFormData({...formData, first_name: e.target.value})} 
                             />
                         </div>
                     </div>
