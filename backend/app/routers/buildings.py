@@ -13,19 +13,25 @@ router = APIRouter(prefix="/buildings", tags=["Buildings"])
 @router.get("/", response_model=List[dict])
 async def list_buildings(db: AsyncSession = Depends(get_db)):
     """List all buildings"""
-    result = await db.execute(select(Building).order_by(Building.building_no))
-    buildings = result.scalars().all()
-    
-    return [
-        {
-            "id": b.id,
-            "building_no": b.building_no,
-            "address": b.address,
-            "name": f"Building {b.building_no}",
-            "totalRooms": 0,  # Could be calculated if needed
-        }
-        for b in buildings
-    ]
+    try:
+        result = await db.execute(select(Building).order_by(Building.building_no))
+        buildings = result.scalars().all()
+        
+        return [
+            {
+                "id": b.id,
+                "building_no": b.building_no,
+                "address": b.address,
+                "name": f"Building {b.building_no}",
+                "totalRooms": 0,  # Could be calculated if needed
+            }
+            for b in buildings
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching buildings: {str(e)}"
+        )
 
 
 @router.get("/{building_id}", response_model=dict)

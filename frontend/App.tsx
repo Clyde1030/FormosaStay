@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import TenantList from './components/TenantList';
@@ -7,24 +7,9 @@ import FinanceManager from './components/FinanceManager';
 import RoomManager from './components/RoomManager';
 import AIAssistant from './components/AIAssistant';
 import SystemSettings from './components/SystemSettings';
-import { supabase } from './services/supabaseClient';
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState('dashboard');
-    const [session, setSession] = useState<any>(null);
-
-    useEffect(() => {
-        // Listen for auth changes
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-        });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
 
     const renderView = () => {
         switch (currentView) {

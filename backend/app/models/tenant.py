@@ -1,6 +1,6 @@
 # app/models/tenant.py
 from sqlalchemy import Column, BigInteger, Text, String, Date, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship as rel
 from app.models.base import Base, AuditMixin
 
 
@@ -19,8 +19,8 @@ class Tenant(Base, AuditMixin):
     address = Column(Text, nullable=False)
 
     # Relationships
-    leases = relationship("Lease", back_populates="tenant")
-    emergency_contacts = relationship("TenantEmergencyContact", back_populates="tenant", cascade="all, delete-orphan")
+    leases = rel("Lease", back_populates="tenant")
+    emergency_contacts = rel("TenantEmergencyContact", back_populates="tenant", cascade="all, delete-orphan")
 
 
 class TenantEmergencyContact(Base):
@@ -35,10 +35,10 @@ class TenantEmergencyContact(Base):
 
     first_name = Column(Text, nullable=False)
     last_name = Column(Text, nullable=False)
-    relation = Column(Text, nullable=False)  # ✅ renamed
+    relationship = Column(Text, nullable=False)  # Matches database schema column name
     phone = Column(Text, nullable=False)
 
-    # Relationships
-    tenant = relationship("Tenant", back_populates="emergency_contacts")
+    # Relationships - using 'rel' alias to avoid conflict with 'relationship' column
+    tenant = rel("Tenant", back_populates="emergency_contacts")
 
 

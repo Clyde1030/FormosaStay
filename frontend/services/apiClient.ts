@@ -26,20 +26,31 @@ class ApiClient {
             const response = await fetch(url, config);
             
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.detail || errorData.message || errorMessage;
+                } catch {
+                    // If response is not JSON, use status text
+                }
+                throw new Error(errorMessage);
             }
 
             // Handle empty responses
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('application/json')) {
-                return await response.json();
+                const data = await response.json();
+                return data;
             }
             
             return {} as T;
-        } catch (error) {
+        } catch (error: any) {
             console.error(`API request failed: ${endpoint}`, error);
-            throw error;
+            // Re-throw with more context
+            if (error.message) {
+                throw error;
+            }
+            throw new Error(`Failed to fetch ${endpoint}: ${error.message || 'Unknown error'}`);
         }
     }
 

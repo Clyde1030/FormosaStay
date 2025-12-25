@@ -1,10 +1,11 @@
 # app/models/base.py
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import Column, BigInteger, DateTime, func
 from datetime import datetime
 
-Base = declarative_base()
 
+class Base(DeclarativeBase):
+    pass
 
 class TimestampMixin:
     """Mixin for created_at and updated_at timestamps"""

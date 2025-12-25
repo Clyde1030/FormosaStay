@@ -15,8 +15,17 @@ const Dashboard: React.FC = () => {
                 const [s, b] = await Promise.all([getDashboardStats(), getBuildings()]);
                 setStats(s);
                 setBuildings(b);
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Dashboard load error:", e);
+                // Set default values to prevent crash
+                setStats({
+                    totalRooms: 0,
+                    occupied: 0,
+                    occupancyRate: 0,
+                    overdueTotal: 0,
+                    overdueCount: 0,
+                });
+                setBuildings([]);
             } finally {
                 setLoading(false);
             }
@@ -30,30 +39,48 @@ const Dashboard: React.FC = () => {
         </div>
     );
 
+    // Handle error state
+    if (!stats) {
+        return (
+            <div className="flex flex-col items-center justify-center h-64 space-y-4">
+                <AlertCircle className="text-red-500" size={48} />
+                <h3 className="text-xl font-bold text-slate-800">Failed to Load Dashboard</h3>
+                <p className="text-slate-500">Unable to connect to the backend API.</p>
+                <p className="text-sm text-slate-400">Make sure the backend is running on http://localhost:8000</p>
+                <button 
+                    onClick={() => window.location.reload()} 
+                    className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">Overview</h2>
-                    <p className="text-slate-500">Real-time data from your Supabase backend.</p>
+                    <p className="text-slate-500">Real-time data from your FastAPI backend.</p>
                 </div>
                 <div className="flex flex-col items-end">
                     <p className="text-sm text-slate-500 font-medium uppercase">Pending Collections</p>
-                    <p className="text-3xl font-bold text-red-600">NT$ {stats.overdueTotal.toLocaleString()}</p>
+                    <p className="text-3xl font-bold text-red-600">NT$ {(stats.overdueTotal || 0).toLocaleString()}</p>
                 </div>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <StatCard 
                     title="Total Occupancy" 
-                    value={`${stats.occupancyRate}%`} 
-                    subtext={`${stats.occupied} / ${stats.totalRooms} Rooms`}
+                    value={`${stats.occupancyRate || 0}%`} 
+                    subtext={`${stats.occupied || 0} / ${stats.totalRooms || 0} Rooms`}
                     icon={<Home className="text-blue-500" />}
                     bgColor="bg-blue-50"
                 />
                 <StatCard 
                     title="Overdue Accounts" 
-                    value={stats.overdueCount.toString()} 
+                    value={(stats.overdueCount || 0).toString()} 
                     subtext="Unpaid lease cycles"
                     icon={<AlertCircle className="text-red-500" />}
                     bgColor="bg-red-50"
