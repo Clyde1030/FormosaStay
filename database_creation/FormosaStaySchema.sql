@@ -31,7 +31,7 @@ CREATE TABLE building (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     building_no INTEGER NOT NULL UNIQUE,
     address TEXT NOT NULL,
-
+    deleted_at TIMESTAMPTZ, 
     created_by BIGINT REFERENCES user_account(id),
     updated_by BIGINT REFERENCES user_account(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -44,7 +44,7 @@ CREATE TABLE room (
     floor_no INTEGER NOT NULL,
     room_no CHAR(1) NOT NULL CHECK (room_no ~ '^[A-Z]$'),
 	size_ping NUMERIC(6,2),
-
+    deleted_at TIMESTAMPTZ,
     created_by BIGINT REFERENCES user_account(id),
     updated_by BIGINT REFERENCES user_account(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -74,7 +74,7 @@ CREATE TABLE tenant (
     email TEXT,
     line_id TEXT,
     address TEXT NOT NULL,
-
+    deleted_at TIMESTAMPTZ,
     created_by BIGINT REFERENCES user_account(id),
     updated_by BIGINT REFERENCES user_account(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

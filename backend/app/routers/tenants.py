@@ -118,9 +118,9 @@ async def create_tenant(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new tenant"""
-    from app.services.lease_service import LeaseService
+    from app.services.tenant_service import TenantService
     
-    tenant = await LeaseService._create_or_update_tenant(db, tenant_data)
+    tenant = await TenantService.create_or_update_tenant(db, tenant_data)
     
     return {
         "id": tenant.id,
@@ -141,10 +141,10 @@ async def update_tenant(
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing tenant"""
-    from app.services.lease_service import LeaseService
+    from app.services.tenant_service import TenantService
     
     # Update tenant using the service method with tenant_id
-    updated_tenant = await LeaseService._create_or_update_tenant(
+    updated_tenant = await TenantService.create_or_update_tenant(
         db, 
         tenant_data, 
         tenant_id=tenant_id,
