@@ -5,7 +5,6 @@ import Dashboard from './components/Dashboard';
 import TenantList from './components/TenantList';
 import FinanceManager from './components/FinanceManager';
 import RoomManager from './components/RoomManager';
-import AIAssistant from './components/AIAssistant';
 import SystemSettings from './components/SystemSettings';
 
 const App: React.FC = () => {
@@ -21,8 +20,6 @@ const App: React.FC = () => {
                 return <TenantList />;
             case 'rooms':
                 return <RoomManager />;
-            case 'ai-assistant':
-                return <AIAssistant />;
             case 'settings':
                 return <SystemSettings />;
             default:
