@@ -5,7 +5,7 @@ from app.schemas.lease import (
     LeaseTerminate,
     LeaseResponse,
     LeaseAssetCreate,
-    LeaseAssetResponse,
+    LeaseTenantResponse,
 )
 from app.schemas.tenant import (
     TenantCreate,
@@ -27,7 +27,7 @@ __all__ = [
     "LeaseTerminate",
     "LeaseResponse",
     "LeaseAssetCreate",
-    "LeaseAssetResponse",
+    "LeaseTenantResponse",
     "TenantCreate",
     "TenantResponse",
     "TenantEmergencyContactCreate",

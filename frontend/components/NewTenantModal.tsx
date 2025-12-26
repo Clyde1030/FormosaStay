@@ -12,7 +12,7 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     const [formData, setFormData] = useState({
         first_name: '',
         last_name: '',
-        gender: 'M',
+        gender: '男',
         birthday: '',
         personal_id: '',
         phone: '',
@@ -109,9 +109,9 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                                 value={formData.gender} 
                                 onChange={e => setFormData({...formData, gender: e.target.value})}
                             >
-                                <option value="M">Male</option>
-                                <option value="F">Female</option>
-                                <option value="O">Other</option>
+                                <option value="男">男</option>
+                                <option value="女">女</option>
+                                <option value="其他">其他</option>
                             </select>
                         </div>
                         <div>

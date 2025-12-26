@@ -48,7 +48,7 @@ export const fetchTenantsWithDetails = async (): Promise<TenantWithLease[]> => {
     const leases = await apiClient.get<any[]>('/leases/');
     
     const activeLeasesByTenant: { [key: number]: any } = {};
-    leases.filter(l => l.status === 'active').forEach(lease => {
+    leases.filter(l => l.status === '有效').forEach(lease => {
         activeLeasesByTenant[lease.tenant_id] = lease;
     });
 
@@ -107,8 +107,8 @@ export const getTenantById = async (tenantId: number): Promise<TenantWithContrac
                 rentAmount: Number(tenant.active_lease.monthly_rent),
                 depositAmount: Number(tenant.active_lease.deposit),
                 itemsIssued: [],
-                paymentFrequency: 'monthly' as any,
-                depositStatus: 'Paid' as any,
+                paymentFrequency: tenant.active_lease.payment_term || PaymentFrequency.MONTHLY,
+                depositStatus: DepositStatus.PAID,
                 startDate: tenant.active_lease.start_date,
                 endDate: tenant.active_lease.end_date,
                 status: tenant.active_lease.status,
@@ -127,8 +127,8 @@ export const getTenantById = async (tenantId: number): Promise<TenantWithContrac
 
 export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract | null> => {
     try {
-        const leases = await apiClient.get<any[]>('/leases/?room_id=' + roomId + '&status=active');
-        const activeLease = leases.find(l => l.status === 'active');
+        const leases = await apiClient.get<any[]>('/leases/?room_id=' + roomId + '&status=有效');
+        const activeLease = leases.find(l => l.status === '有效');
         
         if (!activeLease) return null;
 
@@ -147,8 +147,8 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
                 rentAmount: Number(activeLease.monthly_rent),
                 depositAmount: Number(activeLease.deposit),
                 itemsIssued: activeLease.assets || [],
-                paymentFrequency: activeLease.payment_term,
-                depositStatus: 'Paid' as any,
+                paymentFrequency: activeLease.payment_term as PaymentFrequency,
+                depositStatus: DepositStatus.PAID,
                 vehicle_plate: activeLease.vehicle_plate
             },
             room: {
@@ -326,14 +326,7 @@ export const createContract = async (contract: {
     vehicle_plate?: string;
     assets?: Array<{ asset_type: string; quantity: number }>;
 }) => {
-    // Map payment_term from UI format to backend format
-    const paymentTermMap: { [key: string]: string } = {
-        'Monthly': 'monthly',
-        'Quarterly': 'quarterly',
-        'Semiannually': 'semiannually',
-        'Yearly': 'yearly'
-    };
-    
+    // Payment term is already in Chinese format, pass through directly
     const contractData = {
         tenant_id: contract.tenant_id,
         room_id: contract.room_id,
@@ -342,7 +335,7 @@ export const createContract = async (contract: {
         monthly_rent: contract.monthly_rent,
         deposit: contract.deposit,
         pay_rent_on: contract.pay_rent_on,
-        payment_term: paymentTermMap[contract.payment_term] || contract.payment_term.toLowerCase(),
+        payment_term: contract.payment_term, // Already in Chinese: '月繳', '季繳', '半年繳', '年繳'
         vehicle_plate: contract.vehicle_plate || undefined,
         assets: contract.assets || []
     };

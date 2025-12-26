@@ -40,3 +40,48 @@ SELECT r.*,
        ) AS is_available
 FROM room r
 WHERE r.deleted_at IS NULL;
+
+
+-- tenant join contract
+select * 
+from tenant t
+left join lease s on s.tenant_id  = t.id;
+
+-- user account
+select
+	ur.user_id,
+	ur.role_id,
+	r.code as role,
+	r.description as role_description,
+	ua.email,
+	ua.password_hash,
+	ua.created_at,
+	ua.is_active	
+from user_role ur
+left join role r  on ur.role_id = r.id  
+left join user_account ua on ua.id = ur.user_id
+
+-- Building & Room
+select
+	r.building_id,
+	b.building_no,
+	r.floor_no,
+	r.room_no,
+	b.address
+from room r
+left join building b on b.id = r.building_id;
+
+
+
+
+select * from alembic_version av 
+
+
+
+
+
+
+
+
+
+

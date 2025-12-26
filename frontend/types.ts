@@ -1,29 +1,31 @@
 
+// Payment frequency - using Chinese values to match database
 export enum PaymentFrequency {
-    MONTHLY = 'Monthly',
-    QUARTERLY = 'Quarterly',
-    SEMIANNUALLY = 'Semiannually',
-    YEARLY = 'Yearly'
+    MONTHLY = '月繳',
+    QUARTERLY = '季繳',
+    SEMIANNUALLY = '半年繳',
+    YEARLY = '年繳'
 }
 
+// Lease status - using Chinese values to match database
 export enum LeaseStatus {
-    ACTIVE = 'active',
-    TERMINATED = 'terminated',
-    EXPIRED = 'expired'
+    ACTIVE = '有效',
+    TERMINATED = '終止',
+    EXPIRED = '到期'
 }
 
-// Added for component compatibility
+// Added for component compatibility - display labels
 export enum ContractStatus {
-    ACTIVE = 'Active',
-    TERMINATED = 'Terminated',
-    EXPIRED = 'Expired'
+    ACTIVE = '有效',
+    TERMINATED = '終止',
+    EXPIRED = '到期'
 }
 
-// Added for component compatibility
+// Added for component compatibility - display labels
 export enum DepositStatus {
-    PAID = 'Paid',
-    UNPAID = 'Unpaid',
-    PARTIAL = 'Partial'
+    PAID = '已交',
+    UNPAID = '未交',
+    PARTIAL = '部分未交'
 }
 
 export interface Building {
@@ -62,7 +64,7 @@ export interface Tenant {
     first_name: string;
     last_name: string;
     name?: string; // Component uses name
-    gender: 'M' | 'F' | 'O';
+    gender: '男' | '女' | '其他';
     birthday: string;
     personal_id: string;
     idNumber?: string;
@@ -119,8 +121,10 @@ export interface TenantWithContract extends TenantWithLease {
 
 // --- Finance Types ---
 
-export type PaymentCategory = 'rent' | 'electricity' | 'penalty';
-export type PaymentStatus = 'unpaid' | 'paid' | 'partial' | 'bad_debt';
+// Payment category - using Chinese values to match database
+export type PaymentCategory = '房租' | '電費' | '罰款' | '押金';
+// Payment status - using Chinese values to match database
+export type PaymentStatus = '未交' | '已交' | '部分未交' | '呆帳' | '歸還' | '取消';
 
 export interface Payment {
     id: number;
@@ -173,7 +177,7 @@ export interface CashFlow {
     room_id?: number;
     flow_date: string;
     amount: number;
-    payment_method: 'cash' | 'bank_transfer' | 'linepay' | 'other';
+    payment_method: '現金' | '銀行轉帳' | 'LINE Pay' | '其他';
     note?: string;
 }
 

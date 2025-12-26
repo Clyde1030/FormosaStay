@@ -151,7 +151,7 @@ const TenantList: React.FC = () => {
                                     </td>
                                     <td className="p-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${t.active_lease ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                            {t.active_lease ? 'Active' : 'No Lease'}
+                                            {t.active_lease ? '有效' : '無合約'}
                                         </span>
                                     </td>
                                 </tr>

@@ -157,8 +157,8 @@ class LeaseService:
         await db.commit()
         await db.refresh(new_lease)
 
-        # Load relationships for response
-        await db.refresh(new_lease, ["assets", "tenants", "room"])
+        # Load relationships for response (assets is a JSONB column, not a relationship)
+        await db.refresh(new_lease, ["tenants", "room"])
         return new_lease
 
     @staticmethod
@@ -181,7 +181,6 @@ class LeaseService:
             select(Lease)
             .where(Lease.id == lease_id)
             .options(
-                selectinload(Lease.assets),
                 selectinload(Lease.tenants).selectinload(LeaseTenant.tenant)
             )
         )
@@ -246,7 +245,7 @@ class LeaseService:
         Business rules:
         - Lease must exist and be active
         - Termination date should be between start_date and end_date (or after end_date for expired leases)
-        - Sets status to 'terminated' and records early_termination_date
+        - Sets status to '終止' and records early_termination_date
         - If meter_reading is provided, calculates prorated electricity bill and creates payment record
         """
         # Get the lease with room relationship
@@ -372,7 +371,6 @@ class LeaseService:
     ) -> list[Lease]:
         """List leases with optional filters"""
         query = select(Lease).options(
-            selectinload(Lease.assets),
             selectinload(Lease.tenants).selectinload(LeaseTenant.tenant),
             selectinload(Lease.room)
         )

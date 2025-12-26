@@ -90,20 +90,13 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
         try {
             const oldContract = tenant.currentContract;
             
-            // Map PaymentFrequency to backend format
-            const paymentTermMap: { [key: string]: string } = {
-                'Monthly': 'monthly',
-                'Quarterly': 'quarterly',
-                'Semiannually': 'semiannually',
-                'Yearly': 'yearly'
-            };
-            
+            // Payment term is already in Chinese format, pass through directly
             await renewContract(tenant.currentContract.id, {
                 new_end_date: renewEndDate,
                 new_monthly_rent: renewRent,
                 new_deposit: oldContract.depositAmount,
                 new_pay_rent_on: oldContract.pay_rent_on || 1,
-                new_payment_term: paymentTermMap[renewFrequency] || renewFrequency.toLowerCase(),
+                new_payment_term: renewFrequency, // Already in Chinese: '月繳', '季繳', '半年繳', '年繳'
                 new_vehicle_plate: renewVehiclePlate.trim() || undefined
             });
             
@@ -402,7 +395,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             <div>
                                                 <label className="text-xs text-slate-400">Status</label>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={`w-2 h-2 rounded-full ${tenant.currentContract.status === 'Active' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                                                    <span className={`w-2 h-2 rounded-full ${tenant.currentContract.status === '有效' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
                                                     <span className="font-medium">{tenant.currentContract.status}</span>
                                                 </div>
                                             </div>
@@ -469,7 +462,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                                 ) : (
                                                     <div className="font-medium text-sm flex items-center gap-2">
                                                         NT$ {tenant.currentContract.depositAmount.toLocaleString()}
-                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${tenant.currentContract.depositStatus === 'Paid' ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : 'border-red-200 text-red-700'}`}>
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${tenant.currentContract.depositStatus === DepositStatus.PAID ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : 'border-red-200 text-red-700'}`}>
                                                             {tenant.currentContract.depositStatus}
                                                         </span>
                                                     </div>

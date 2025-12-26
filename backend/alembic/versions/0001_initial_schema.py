@@ -6,7 +6,6 @@ Create Date: 2025-01-XX XX:XX:XX.XXXXXX
 
 """
 from typing import Sequence, Union
-
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -20,12 +19,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Create initial schema matching FormosaStaySchema.sql"""
-    
+
+
     # Security & Roles
     op.create_table('user_account',
         sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
-        sa.Column('email', sa.String(), nullable=False),
-        sa.Column('password_hash', sa.String(), nullable=False),
+        sa.Column('email', sa.Text(), nullable=False),
+        sa.Column('password_hash', sa.Text(), nullable=False),
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.text('true')),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id', name='pk_user_account'),
@@ -86,13 +86,19 @@ def upgrade() -> None:
     op.create_index('idx_room_building', 'room', ['building_id'], unique=False)
     
     # Tenant
-    op.execute("CREATE TYPE gender_type AS ENUM ('男','女','其他')")
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE gender_type AS ENUM ('男','女','其他');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
     
     op.create_table('tenant',
         sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column('first_name', sa.Text(), nullable=False),
         sa.Column('last_name', sa.Text(), nullable=False),
-        sa.Column('gender', postgresql.ENUM('男', '女', '其他', name='gender_type'), nullable=False),
+        sa.Column('gender', postgresql.ENUM('男', '女', '其他', name='gender_type', create_type=False), nullable=False),
         sa.Column('birthday', sa.Date(), nullable=False),
         sa.Column('personal_id', sa.Text(), nullable=False),
         sa.Column('phone', sa.Text(), nullable=False),
@@ -122,8 +128,20 @@ def upgrade() -> None:
     )
     
     # Lease
-    op.execute("CREATE TYPE lease_status AS ENUM ('有效','終止','到期')")
-    op.execute("CREATE TYPE payment_term_type AS ENUM ('年繳','半年繳','季繳','月繳')")
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE lease_status AS ENUM ('有效','終止','到期');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE payment_term_type AS ENUM ('年繳','半年繳','季繳','月繳');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
     
     op.create_table('lease',
         sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
@@ -134,8 +152,8 @@ def upgrade() -> None:
         sa.Column('monthly_rent', sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column('deposit', sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column('pay_rent_on', sa.SmallInteger(), nullable=False),
-        sa.Column('payment_term', postgresql.ENUM('年繳', '半年繳', '季繳', '月繳', name='payment_term_type'), nullable=False),
-        sa.Column('status', postgresql.ENUM('有效', '終止', '到期', name='lease_status'), nullable=False),
+        sa.Column('payment_term', postgresql.ENUM('年繳', '半年繳', '季繳', '月繳', name='payment_term_type', create_type=False), nullable=False),
+        sa.Column('status', postgresql.ENUM('有效', '終止', '到期', name='lease_status', create_type=False), nullable=False),
         sa.Column('assets', postgresql.JSONB, nullable=True),
         sa.Column('vehicle_plate', sa.String(), nullable=True),
         sa.Column('created_by', sa.BigInteger(), nullable=True),
@@ -151,19 +169,24 @@ def upgrade() -> None:
         sa.CheckConstraint("early_termination_date IS NULL OR (early_termination_date >= start_date AND early_termination_date <= end_date)", name='chk_early_termination'),
         sa.CheckConstraint('monthly_rent >= 0', name='chk_monthly_rent'),
         sa.CheckConstraint('deposit >= 0', name='chk_deposit'),
-        sa.CheckConstraint('pay_rent_on BETWEEN 1 AND 31', name='chk_pay_rent_on'),
-        sa.CheckConstraint("assets IS NULL OR (jsonb_typeof(assets) = 'array' AND (SELECT bool_and(elem->>'type' IN ('鑰匙', '磁扣', '遙控器') AND (elem->>'quantity')::integer >= 1) FROM jsonb_array_elements(assets) AS elem))", name='chk_lease_assets_structure')
+        sa.CheckConstraint('pay_rent_on BETWEEN 1 AND 31', name='chk_pay_rent_on')
     )
     op.create_index('idx_lease_room', 'lease', ['room_id'], unique=False)
     op.create_index('uq_active_lease_per_room', 'lease', ['room_id'], unique=True, 
                     postgresql_where=sa.text("status = '有效' AND deleted_at IS NULL"))
     
-    op.execute("CREATE TYPE tenant_role_type AS ENUM ('主要','次要')")
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE tenant_role_type AS ENUM ('主要','次要');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
     
     op.create_table('lease_tenant',
         sa.Column('lease_id', sa.BigInteger(), nullable=False),
         sa.Column('tenant_id', sa.BigInteger(), nullable=False),
-        sa.Column('tenant_role', postgresql.ENUM('主要', '次要', name='tenant_role_type'), nullable=False),
+        sa.Column('tenant_role', postgresql.ENUM('主要', '次要', name='tenant_role_type', create_type=False), nullable=False),
         sa.Column('joined_at', sa.Date(), server_default=sa.text('CURRENT_DATE'), nullable=True),
         sa.ForeignKeyConstraint(['lease_id'], ['lease.id'], ondelete='CASCADE', name='fk_lt_lease'),
         sa.ForeignKeyConstraint(['tenant_id'], ['tenant.id'], ondelete='RESTRICT', name='fk_lt_tenant'),
@@ -173,19 +196,31 @@ def upgrade() -> None:
                     postgresql_where=sa.text("tenant_role = '主要'"))
     
     # Invoice
-    op.execute("CREATE TYPE payment_status AS ENUM ('未交','已交','部分未交','呆帳','歸還','取消')")
-    op.execute("CREATE TYPE invoice_category AS ENUM ('房租','電費', '罰款', '押金')")
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE payment_status AS ENUM ('未交','已交','部分未交','呆帳','歸還','取消');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE invoice_category AS ENUM ('房租','電費', '罰款', '押金');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
     
     op.create_table('invoice',
         sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column('lease_id', sa.BigInteger(), nullable=False),
-        sa.Column('category', postgresql.ENUM('房租', '電費', '罰款', '押金', name='invoice_category'), nullable=False),
+        sa.Column('category', postgresql.ENUM('房租', '電費', '罰款', '押金', name='invoice_category', create_type=False), nullable=False),
         sa.Column('period_start', sa.Date(), nullable=False),
         sa.Column('period_end', sa.Date(), nullable=False),
         sa.Column('due_date', sa.Date(), nullable=False),
         sa.Column('due_amount', sa.Numeric(precision=10, scale=2), nullable=False),
         sa.Column('paid_amount', sa.Numeric(precision=10, scale=2), nullable=False, server_default=sa.text('0')),
-        sa.Column('status', postgresql.ENUM('未交', '已交', '部分未交', '呆帳', '歸還', '取消', name='payment_status'), nullable=False),
+        sa.Column('status', postgresql.ENUM('未交', '已交', '部分未交', '呆帳', '歸還', '取消', name='payment_status', create_type=False), nullable=False),
         sa.Column('created_by', sa.BigInteger(), nullable=True),
         sa.Column('updated_by', sa.BigInteger(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -240,15 +275,33 @@ def upgrade() -> None:
     op.create_index('idx_meter_room_date', 'meter_reading', ['room_id', 'read_date'], unique=False)
     
     # Cash Flow
-    op.execute("CREATE TYPE cash_direction_type AS ENUM ('收入','支出','轉帳')")
-    op.execute("CREATE TYPE cash_account_type AS ENUM ('現金','銀行','第三方支付')")
-    op.execute("CREATE TYPE payment_method_type AS ENUM ('現金','銀行轉帳','LINE Pay','其他')")
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE cash_direction_type AS ENUM ('收入','支出','轉帳');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE cash_account_type AS ENUM ('現金','銀行','第三方支付');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE payment_method_type AS ENUM ('現金','銀行轉帳','LINE Pay','其他');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
     
     op.create_table('cash_flow_category',
         sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column('code', sa.String(), nullable=False),
         sa.Column('name', sa.String(), nullable=False),
-        sa.Column('direction', postgresql.ENUM('收入', '支出', '轉帳', name='cash_direction_type'), nullable=False),
+        sa.Column('direction', postgresql.ENUM('收入', '支出', '轉帳', name='cash_direction_type', create_type=False), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint('id', name='pk_cash_flow_category'),
         sa.UniqueConstraint('code', name='uq_cash_flow_category_code')
@@ -257,7 +310,7 @@ def upgrade() -> None:
     op.create_table('cash_account',
         sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column('name', sa.String(), nullable=False),
-        sa.Column('account_type', postgresql.ENUM('現金', '銀行', '第三方支付', name='cash_account_type'), nullable=False),
+        sa.Column('account_type', postgresql.ENUM('現金', '銀行', '第三方支付', name='cash_account_type', create_type=False), nullable=False),
         sa.Column('note', sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint('id', name='pk_cash_account')
     )
@@ -272,7 +325,7 @@ def upgrade() -> None:
         sa.Column('invoice_id', sa.BigInteger(), nullable=True),
         sa.Column('flow_date', sa.Date(), nullable=False),
         sa.Column('amount', sa.Numeric(precision=10, scale=2), nullable=False),
-        sa.Column('payment_method', postgresql.ENUM('現金', '銀行轉帳', 'LINE Pay', '其他', name='payment_method_type'), nullable=False),
+        sa.Column('payment_method', postgresql.ENUM('現金', '銀行轉帳', 'LINE Pay', '其他', name='payment_method_type', create_type=False), nullable=False),
         sa.Column('note', sa.Text(), nullable=True),
         sa.Column('created_by', sa.BigInteger(), nullable=True),
         sa.Column('updated_by', sa.BigInteger(), nullable=True),
@@ -431,6 +484,41 @@ def upgrade() -> None:
     """)
     
     op.execute("""
+        CREATE OR REPLACE FUNCTION validate_lease_assets()
+        RETURNS trigger AS $$
+        DECLARE
+            elem JSONB;
+        BEGIN
+            -- If assets is NULL, it's valid
+            IF NEW.assets IS NULL THEN
+                RETURN NEW;
+            END IF;
+            
+            -- Check that assets is an array
+            IF jsonb_typeof(NEW.assets) != 'array' THEN
+                RAISE EXCEPTION 'assets must be a JSON array';
+            END IF;
+            
+            -- Validate each element in the array
+            FOR elem IN SELECT * FROM jsonb_array_elements(NEW.assets)
+            LOOP
+                -- Check that type is one of the allowed values
+                IF elem->>'type' NOT IN ('鑰匙', '磁扣', '遙控器') THEN
+                    RAISE EXCEPTION 'Invalid asset type: %. Allowed types are: 鑰匙, 磁扣, 遙控器', elem->>'type';
+                END IF;
+                
+                -- Check that quantity is a positive integer
+                IF (elem->>'quantity')::integer < 1 THEN
+                    RAISE EXCEPTION 'Asset quantity must be at least 1, got: %', elem->>'quantity';
+                END IF;
+            END LOOP;
+            
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+    """)
+    
+    op.execute("""
         CREATE TRIGGER trg_cf_room_building
         BEFORE INSERT OR UPDATE ON cash_flow
         FOR EACH ROW
@@ -463,6 +551,13 @@ def upgrade() -> None:
         BEFORE INSERT OR UPDATE ON lease_tenant
         FOR EACH ROW
         EXECUTE FUNCTION prevent_deleted_tenant();
+    """)
+    
+    op.execute("""
+        CREATE TRIGGER trg_lease_validate_assets
+        BEFORE INSERT OR UPDATE ON lease
+        FOR EACH ROW
+        EXECUTE FUNCTION validate_lease_assets();
     """)
     
     op.execute("""
@@ -637,12 +732,14 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop all tables and functions"""
+    op.execute("DROP TRIGGER IF EXISTS trg_lease_validate_assets ON lease")
     op.execute("DROP TRIGGER IF EXISTS trg_lease_tenant_no_deleted_tenant ON lease_tenant")
     op.execute("DROP TRIGGER IF EXISTS trg_lease_no_deleted_room ON lease")
     op.execute("DROP TRIGGER IF EXISTS trg_invoice_no_deleted_lease ON invoice")
     op.execute("DROP TRIGGER IF EXISTS trg_cf_lease_room_building ON cash_flow")
     op.execute("DROP TRIGGER IF EXISTS trg_cf_room_building ON cash_flow")
     op.execute("DROP FUNCTION IF EXISTS soft_delete")
+    op.execute("DROP FUNCTION IF EXISTS validate_lease_assets")
     op.execute("DROP FUNCTION IF EXISTS prevent_deleted_tenant")
     op.execute("DROP FUNCTION IF EXISTS prevent_deleted_room")
     op.execute("DROP FUNCTION IF EXISTS prevent_deleted_parent")
