@@ -254,7 +254,7 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
                                             }}
                                         >
                                             <option value="鑰匙">鑰匙 (Key)</option>
-                                            <option value="磁扣">磁扣 (Card)</option>
+                                            <option value="磁扣">磁扣 (Fob)</option>
                                             <option value="遙控器">遙控器 (Remote)</option>
                                         </select>
                                     </div>
@@ -277,7 +277,7 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
                             </div>
                         ))}
                         {assets.length === 0 && (
-                            <p className="text-xs text-slate-500 italic">No assets added. Click "Add Asset" to add items like keys, cards, or remotes.</p>
+                            <p className="text-xs text-slate-500 italic">No assets added. Click "Add Asset" to add items like keys, fobs, or remotes.</p>
                         )}
                     </div>
                     </form>

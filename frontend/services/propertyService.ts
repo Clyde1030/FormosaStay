@@ -38,30 +38,23 @@ export const getTenants = async (): Promise<Tenant[]> => {
         name: t.name || `${t.last_name}${t.first_name}`,
         phoneNumber: t.phoneNumber || t.phone,
         idNumber: t.idNumber || t.personal_id,
-        homeAddress: t.homeAddress || t.address
+        emergency_contacts: t.emergency_contacts || []
     }));
 };
 
 export const fetchTenantsWithDetails = async (): Promise<TenantWithLease[]> => {
-    // Get tenants and leases separately, then combine
+    // Get tenants from the view which already includes active lease info
     const tenants = await getTenants();
-    const leases = await apiClient.get<any[]>('/leases/');
     
-    const activeLeasesByTenant: { [key: number]: any } = {};
-    leases.filter(l => l.status === '有效').forEach(lease => {
-        activeLeasesByTenant[lease.tenant_id] = lease;
-    });
-
     return tenants.map(t => {
-        const activeLease = activeLeasesByTenant[t.id];
         return {
             ...t,
-            active_lease: activeLease,
-            room: activeLease?.room ? {
-                ...activeLease.room,
-                roomNumber: activeLease.room.roomNumber || `${activeLease.room.floor_no}${activeLease.room.room_no}`
+            active_lease: t.active_lease,
+            room: t.active_lease?.room ? {
+                ...t.active_lease.room,
+                roomNumber: t.active_lease.room.roomNumber || `${t.active_lease.room.floor_no}${t.active_lease.room.room_no}`
             } : undefined,
-            building: activeLease?.room?.building
+            building: t.active_lease?.room?.building
         };
     });
 };
@@ -119,13 +112,12 @@ export const getTenantById = async (tenantId: number): Promise<TenantWithContrac
             name: tenant.name || `${tenant.last_name}${tenant.first_name}`,
             phoneNumber: tenant.phoneNumber || tenant.phone,
             idNumber: tenant.idNumber || tenant.personal_id,
-            homeAddress: tenant.homeAddress || tenant.address,
             emergency_contacts: tenant.emergency_contacts || [],
             currentContract: tenant.active_lease ? {
                 id: tenant.active_lease.id,
                 rentAmount: Number(tenant.active_lease.monthly_rent),
                 depositAmount: Number(tenant.active_lease.deposit),
-                itemsIssued: [],
+                itemsIssued: tenant.active_lease.assets || [],
                 paymentFrequency: tenant.active_lease.payment_term || PaymentFrequency.MONTHLY,
                 depositStatus: DepositStatus.PAID,
                 startDate: tenant.active_lease.start_date,
@@ -135,7 +127,8 @@ export const getTenantById = async (tenantId: number): Promise<TenantWithContrac
             } : undefined,
             room: tenant.active_lease?.room ? {
                 id: tenant.active_lease.room.id,
-                roomNumber: tenant.active_lease.room.roomNumber || `${tenant.active_lease.room.floor_no}${tenant.active_lease.room.room_no}`
+                roomNumber: tenant.active_lease.room.roomNumber || `${tenant.active_lease.room.floor_no}${tenant.active_lease.room.room_no}`,
+                building_id: tenant.active_lease.room.building_id
             } : undefined
         };
     } catch (error) {
@@ -176,7 +169,6 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
             line_id: tenantData.line_id,
             lineId: tenantData.line_id,
             address: tenantData.tenant_address,
-            homeAddress: tenantData.tenant_address,
             currentContract: {
                 id: tenantData.lease_id,
                 tenant_id: tenantData.tenant_id,
@@ -184,7 +176,7 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
                 rentAmount: Number(tenantData.monthly_rent) || 0,
                 depositAmount: Number(tenantData.deposit) || 0,
                 startDate: tenantData.lease_start_date,
-                endDate: tenantData.lease_end_date,
+                endDate: tenantData.early_termination_date || tenantData.lease_end_date,
                 paymentFrequency: tenantData.payment_term as PaymentFrequency,
                 depositStatus: DepositStatus.PAID,
                 itemsIssued: Array.isArray(tenantData.assets) ? tenantData.assets : [],
@@ -306,7 +298,7 @@ export const updateTenant = async (id: number, updates: Partial<Tenant>) => {
         phone: updates.phone || updates.phoneNumber || '',
         email: updates.email || undefined,
         line_id: updates.line_id || updates.lineId || undefined,
-        address: updates.address || updates.homeAddress || '',
+        address: updates.address || '',
         emergency_contacts: updates.emergency_contacts?.map(ec => ({
             first_name: ec.first_name,
             last_name: ec.last_name,

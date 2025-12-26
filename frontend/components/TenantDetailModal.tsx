@@ -114,20 +114,34 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     };
 
     const handleSaveEdits = async () => {
-        await updateTenant(tenant.id, editTenant);
-        if (tenant.currentContract && editContract) {
-            // Fix: Map UI properties back to backend schema fields for updateContract
-            await updateContract(tenant.currentContract.id, {
-                ...editContract,
-                monthly_rent: editContract.rentAmount,
-                payment_term: editContract.paymentFrequency,
-                start_date: editContract.startDate,
-                end_date: editContract.endDate,
-                deposit: editContract.depositAmount
-            });
+        setIsSubmitting(true);
+        setError(null);
+        
+        try {
+            await updateTenant(tenant.id, editTenant);
+            if (tenant.currentContract && editContract) {
+                // Fix: Map UI properties back to backend schema fields for updateContract
+                await updateContract(tenant.currentContract.id, {
+                    ...editContract,
+                    monthly_rent: editContract.rentAmount,
+                    payment_term: editContract.paymentFrequency,
+                    start_date: editContract.startDate,
+                    end_date: editContract.endDate,
+                    deposit: editContract.depositAmount
+                });
+            }
+            setIsEditing(false);
+            onClose();
+            // Trigger refresh in parent component if callback exists
+            if ((onClose as any).onSuccess) {
+                (onClose as any).onSuccess();
+            }
+        } catch (err: any) {
+            setError(err.message || 'Failed to update tenant. Please try again.');
+            console.error('Error updating tenant:', err);
+        } finally {
+            setIsSubmitting(false);
         }
-        setIsEditing(false);
-        onClose(); 
     };
 
     const handlePrint = () => {
@@ -156,7 +170,13 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                 onChange={e => setEditTenant({...editTenant, name: e.target.value})}
                             />
                         ) : (
-                            <h2 className="text-2xl font-bold text-slate-800">{tenant.name}</h2>
+                            <h2 
+                                className="text-2xl font-bold text-slate-800 cursor-pointer hover:text-brand-600 transition-colors"
+                                onClick={() => setIsEditing(true)}
+                                title="Click to edit"
+                            >
+                                {tenant.name}
+                            </h2>
                         )}
                         <div className="flex items-center gap-3 mt-2 text-sm text-slate-600">
                             {isEditing ? (
@@ -166,8 +186,22 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                 </>
                             ) : (
                                 <>
-                                    <span className="flex items-center gap-1"><Phone size={14}/> {tenant.phoneNumber}</span>
-                                    {tenant.lineId && <span className="flex items-center gap-1 text-green-600 font-medium"><MessageCircle size={14}/> {tenant.lineId}</span>}
+                                    <span 
+                                        className="flex items-center gap-1 cursor-pointer hover:text-brand-600 transition-colors"
+                                        onClick={() => setIsEditing(true)}
+                                        title="Click to edit"
+                                    >
+                                        <Phone size={14}/> {tenant.phoneNumber}
+                                    </span>
+                                    {tenant.lineId && (
+                                        <span 
+                                            className="flex items-center gap-1 text-green-600 font-medium cursor-pointer hover:text-green-700 transition-colors"
+                                            onClick={() => setIsEditing(true)}
+                                            title="Click to edit"
+                                        >
+                                            <MessageCircle size={14}/> {tenant.lineId}
+                                        </span>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -182,11 +216,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                     {view === 'details' && (
                         <>
                             <div className="flex justify-end gap-2 mb-2">
-                                {isEditing ? (
-                                     <button onClick={handleSaveEdits} className="flex items-center gap-2 bg-brand-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-brand-700">
-                                        <Save size={16} /> Save Changes
-                                     </button>
-                                ) : (
+                                {!isEditing && (
                                     <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 text-slate-600">
                                         <Edit size={16} /> Edit Profile
                                     </button>
@@ -218,9 +248,9 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                     <div>
                                         <label className="text-xs text-slate-500 uppercase font-bold">Address</label>
                                         {isEditing ? (
-                                            <input className="w-full border rounded px-2 py-1" value={editTenant.homeAddress} onChange={e => setEditTenant({...editTenant, homeAddress: e.target.value})} />
+                                            <input className="w-full border rounded px-2 py-1" value={editTenant.address} onChange={e => setEditTenant({...editTenant, address: e.target.value})} />
                                         ) : (
-                                            <p className="text-slate-800 text-sm">{tenant.homeAddress}</p>
+                                            <p className="text-slate-800 text-sm">{tenant.address}</p>
                                         )}
                                     </div>
                                     <div>
@@ -716,6 +746,51 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                     )}
 
                 </div>
+                
+                {/* Fixed Footer - Only show when editing */}
+                {view === 'details' && isEditing && (
+                    <div className="border-t border-slate-200 bg-slate-50 p-4 flex flex-col gap-3 flex-shrink-0">
+                        {error && (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                                {error}
+                            </div>
+                        )}
+                        <div className="flex justify-end gap-3">
+                            <button 
+                                onClick={() => {
+                                    setIsEditing(false);
+                                    setError(null);
+                                    // Reset edit state to original values
+                                    setEditTenant({ 
+                                        ...tenant,
+                                        emergency_contacts: tenant.emergency_contacts ? [...tenant.emergency_contacts] : []
+                                    });
+                                    setEditContract(tenant.currentContract ? { ...tenant.currentContract } : null);
+                                }}
+                                disabled={isSubmitting}
+                                className="px-4 py-2 border border-slate-300 bg-white rounded-lg hover:bg-slate-50 text-slate-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleSaveEdits}
+                                disabled={isSubmitting}
+                                className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={16} />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save size={16} /> Save Changes
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

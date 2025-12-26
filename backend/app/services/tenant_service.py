@@ -1,6 +1,6 @@
 # app/services/tenant_service.py
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, and_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 
@@ -23,7 +23,7 @@ class TenantService:
         Create or update tenant information.
         
         If tenant_id is provided, update existing tenant.
-        If tenant_id is not provided, find tenant by personal_id or create new one.
+        If tenant_id is not provided, find tenant by tenant name or create new one.
         
         Args:
             db: Database session
@@ -53,10 +53,15 @@ class TenantService:
                     detail=f"Tenant with id {tenant_id} not found"
                 )
         else:
-            # Find tenant by personal_id or create new
+            # Find tenant by tenant name or create new
             result = await db.execute(
                 select(Tenant)
-                .where(Tenant.personal_id == tenant_data.personal_id)
+                .where(
+                    and_(
+                        Tenant.first_name == tenant_data.first_name,
+                        Tenant.last_name == tenant_data.last_name
+                    )
+                )
                 .options(selectinload(Tenant.emergency_contacts))
             )
             tenant = result.scalar_one_or_none()
