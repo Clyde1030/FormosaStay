@@ -1,7 +1,11 @@
 # app/models/tenant.py
-from sqlalchemy import Column, BigInteger, Text, String, Date, ForeignKey
+from sqlalchemy import Column, BigInteger, Text, Date, ForeignKey
+from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import relationship as rel
 from app.models.base import Base, AuditMixin
+
+# Define ENUM types
+gender_type = ENUM('男', '女', '其他', name='gender_type', create_type=False)
 
 
 class Tenant(Base, AuditMixin):
@@ -10,7 +14,7 @@ class Tenant(Base, AuditMixin):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     first_name = Column(Text, nullable=False)
     last_name = Column(Text, nullable=False)
-    gender = Column(String(1), nullable=False)  # 'M', 'F', 'O'
+    gender = Column(gender_type, nullable=False)  # '男', '女', '其他'
     birthday = Column(Date, nullable=False)
     personal_id = Column(Text, nullable=False, unique=True)
     phone = Column(Text, nullable=False)

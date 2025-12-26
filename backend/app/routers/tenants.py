@@ -7,7 +7,7 @@ from typing import List
 
 from app.db.session import get_db
 from app.models.tenant import Tenant
-from app.models.lease import Lease
+from app.models.lease import Lease, LeaseTenant
 from app.schemas.tenant import TenantCreate
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
@@ -56,7 +56,7 @@ async def get_tenant(tenant_id: int, db: AsyncSession = Depends(get_db)):
         select(Tenant)
         .where(Tenant.id == tenant_id)
         .options(
-            selectinload(Tenant.leases).selectinload(Lease.room),
+            selectinload(Tenant.lease_tenants).selectinload(LeaseTenant.lease).selectinload(Lease.room),
             selectinload(Tenant.emergency_contacts)
         )
     )
@@ -68,7 +68,12 @@ async def get_tenant(tenant_id: int, db: AsyncSession = Depends(get_db)):
             detail=f"Tenant with id {tenant_id} not found"
         )
     
-    active_lease = next((l for l in tenant.leases if l.status == "active"), None)
+    # Get active lease through lease_tenants relationship
+    active_lease = None
+    for lt in tenant.lease_tenants:
+        if lt.lease.status == "有效" and (lt.lease.deleted_at is None):
+            active_lease = lt.lease
+            break
     
     return {
         "id": tenant.id,

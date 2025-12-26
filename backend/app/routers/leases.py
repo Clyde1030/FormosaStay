@@ -30,7 +30,7 @@ async def create_lease(
     """
     lease = await LeaseService.create_lease(db, lease_data)
     # Extract primary tenant_id for backward compatibility
-    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
     lease_dict = LeaseResponse.model_validate(lease).model_dump()
     if primary_tenant:
         lease_dict['tenant_id'] = primary_tenant.tenant_id
@@ -53,7 +53,7 @@ async def renew_lease(
     """
     lease = await LeaseService.renew_lease(db, lease_id, renew_data)
     # Extract primary tenant_id for backward compatibility
-    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
     lease_dict = LeaseResponse.model_validate(lease).model_dump()
     if primary_tenant:
         lease_dict['tenant_id'] = primary_tenant.tenant_id
@@ -76,7 +76,7 @@ async def terminate_lease(
     """
     lease = await LeaseService.terminate_lease(db, lease_id, terminate_data)
     # Extract primary tenant_id for backward compatibility
-    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
     lease_dict = LeaseResponse.model_validate(lease).model_dump()
     if primary_tenant:
         lease_dict['tenant_id'] = primary_tenant.tenant_id
@@ -98,7 +98,7 @@ async def get_lease(
             detail=f"Lease with id {lease_id} not found"
         )
     # Extract primary tenant_id for backward compatibility
-    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
     lease_dict = LeaseResponse.model_validate(lease).model_dump()
     if primary_tenant:
         lease_dict['tenant_id'] = primary_tenant.tenant_id
@@ -109,7 +109,7 @@ async def get_lease(
 async def list_leases(
     tenant_id: Optional[int] = Query(None, description="Filter by tenant ID"),
     room_id: Optional[int] = Query(None, description="Filter by room ID"),
-    status: Optional[str] = Query(None, description="Filter by status (active, terminated, expired)"),
+    status: Optional[str] = Query(None, description="Filter by status (有效, 終止, 到期)"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
     db: AsyncSession = Depends(get_db),

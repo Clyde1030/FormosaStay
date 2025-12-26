@@ -4,7 +4,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 
-from app.models.lease import Lease, LeaseAsset, LeaseTenant
+from app.models.lease import Lease, LeaseTenant
 from app.models.room import Room
 from app.models.tenant import Tenant
 from app.models.invoice import Invoice
@@ -86,7 +86,7 @@ class LeaseService:
             .where(
                 and_(
                     Lease.room_id == lease_data.room_id,
-                    Lease.status == "active",
+                    Lease.status == "有效",
                     Lease.deleted_at.is_(None)
                 )
             )
@@ -95,7 +95,7 @@ class LeaseService:
         existing_lease = existing_lease_result.scalar_one_or_none()
         if existing_lease:
             # Get primary tenant
-            primary_tenant_relation = next((lt for lt in existing_lease.tenants if lt.tenant_role == 'primary'), None)
+            primary_tenant_relation = next((lt for lt in existing_lease.tenants if lt.tenant_role == '主要'), None)
             if primary_tenant_relation:
                 existing_tenant = primary_tenant_relation.tenant
                 existing_tenant_name = f"{existing_tenant.first_name} {existing_tenant.last_name}"
@@ -119,6 +119,14 @@ class LeaseService:
                 detail=f"end_date must be after start_date. {tenant_info}"
             )
 
+        # Convert assets to JSONB format
+        assets_jsonb = None
+        if lease_data.assets:
+            assets_jsonb = [
+                {"type": asset.type, "quantity": asset.quantity}
+                for asset in lease_data.assets
+            ]
+
         # Create new lease
         new_lease = Lease(
             room_id=lease_data.room_id,
@@ -129,7 +137,8 @@ class LeaseService:
             pay_rent_on=lease_data.pay_rent_on,
             payment_term=lease_data.payment_term,
             vehicle_plate=lease_data.vehicle_plate,
-            status="active",
+            status="有效",
+            assets=assets_jsonb,
             created_by=created_by,
         )
 
@@ -140,20 +149,10 @@ class LeaseService:
         lease_tenant = LeaseTenant(
             lease_id=new_lease.id,
             tenant_id=tenant.id,
-            tenant_role="primary",
+            tenant_role="主要",
             joined_at=lease_data.start_date,
         )
         db.add(lease_tenant)
-
-        # Create lease assets if provided
-        if lease_data.assets:
-            for asset_data in lease_data.assets:
-                asset = LeaseAsset(
-                    lease_id=new_lease.id,
-                    asset_type=asset_data.asset_type,
-                    quantity=asset_data.quantity,
-                )
-                db.add(asset)
 
         await db.commit()
         await db.refresh(new_lease)
@@ -195,7 +194,7 @@ class LeaseService:
             )
 
         # Get primary tenant for info messages
-        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
         if primary_tenant_relation:
             tenant = primary_tenant_relation.tenant
             tenant_name = f"{tenant.first_name} {tenant.last_name}"
@@ -203,7 +202,7 @@ class LeaseService:
         else:
             tenant_info = f"Lease ID: {lease_id}"
 
-        if lease.status != "active":
+        if lease.status != "有效":
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot renew lease with status '{lease.status}'. Only active leases can be renewed. {tenant_info}"
@@ -255,7 +254,6 @@ class LeaseService:
             select(Lease)
             .where(Lease.id == lease_id)
             .options(
-                selectinload(Lease.assets),
                 selectinload(Lease.tenants).selectinload(LeaseTenant.tenant),
                 selectinload(Lease.room)
             )
@@ -269,7 +267,7 @@ class LeaseService:
             )
 
         # Get primary tenant for info messages
-        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
         if primary_tenant_relation:
             tenant = primary_tenant_relation.tenant
             tenant_name = f"{tenant.first_name} {tenant.last_name}"
@@ -277,7 +275,7 @@ class LeaseService:
         else:
             tenant_info = f"Lease ID: {lease_id}"
 
-        if lease.status != "active":
+        if lease.status != "有效":
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot terminate lease with status '{lease.status}'. Only active leases can be terminated. {tenant_info}"
@@ -339,7 +337,7 @@ class LeaseService:
                 ) from e
 
         # Update lease status
-        lease.status = "terminated"
+        lease.status = "終止"
         lease.early_termination_date = terminate_data.termination_date
         lease.updated_by = updated_by
 
@@ -357,7 +355,6 @@ class LeaseService:
             select(Lease)
             .where(Lease.id == lease_id)
             .options(
-                selectinload(Lease.assets),
                 selectinload(Lease.tenants).selectinload(LeaseTenant.tenant),
                 selectinload(Lease.room)
             )

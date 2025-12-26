@@ -1,8 +1,14 @@
--- tenant join contract
+-- tenant join contract (updated to use lease_tenant relationship)
 CREATE OR REPLACE VIEW v_tenant_lease AS
-select * 
+select 
+    t.*,
+    lt.lease_id,
+    lt.tenant_role,
+    lt.joined_at,
+    l.*
 from tenant t
-left join lease s on s.tenant_id  = t.id;
+left join lease_tenant lt on lt.tenant_id = t.id
+left join lease l on l.id = lt.lease_id;
 
 -- user account
 CREATE OR REPLACE VIEW v_user_role AS
@@ -28,7 +34,7 @@ SELECT r.*,
            SELECT 1
            FROM lease l
            WHERE l.room_id = r.id
-             AND l.status = 'active'
+             AND l.status = '有效'
              AND l.deleted_at IS NULL
          )
        ) AS is_available

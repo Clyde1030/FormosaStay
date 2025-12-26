@@ -30,7 +30,7 @@ async def list_rooms(
     
     # Get active leases to determine room status
     leases_result = await db.execute(
-        select(Lease).where(Lease.status == "active")
+        select(Lease).where(Lease.status == "有效")
     )
     active_leases = {lease.room_id: lease for lease in leases_result.scalars().all()}
     
@@ -78,7 +78,7 @@ async def get_room(room_id: int, db: AsyncSession = Depends(get_db)):
         select(Lease).where(
             and_(
                 Lease.room_id == room_id,
-                Lease.status == "active"
+                Lease.status == "有效"
             )
         )
     )

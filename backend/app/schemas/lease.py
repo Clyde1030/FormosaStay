@@ -2,31 +2,23 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from app.schemas.tenant import TenantCreate
 
 
 class LeaseAssetCreate(BaseModel):
-    asset_type: str = Field(..., description="Type of asset: 'key', 'fob', or 'controller'")
+    """Schema for creating a lease asset (used in JSONB assets array)"""
+    type: str = Field(..., description="Type of asset: '鑰匙', '磁扣', or '遙控器'")
     quantity: int = Field(default=1, ge=1, description="Quantity of the asset")
 
-    @field_validator("asset_type")
+    @field_validator("type")
     @classmethod
     def validate_asset_type(cls, v: str) -> str:
-        allowed = {"key", "fob", "controller"}
+        allowed = {"鑰匙", "磁扣", "遙控器"}
         if v not in allowed:
-            raise ValueError(f"asset_type must be one of {allowed}")
+            raise ValueError(f"asset type must be one of {allowed}")
         return v
-
-
-class LeaseAssetResponse(BaseModel):
-    id: int
-    asset_type: str
-    quantity: int
-
-    class Config:
-        from_attributes = True
 
 
 class LeaseCreate(BaseModel):
@@ -44,9 +36,9 @@ class LeaseCreate(BaseModel):
     monthly_rent: Decimal = Field(..., gt=0, description="Monthly rent amount")
     deposit: Decimal = Field(..., ge=0, description="Security deposit amount")
     pay_rent_on: int = Field(..., ge=1, le=31, description="Day of month when rent is due (1-31)")
-    payment_term: str = Field(..., description="Payment term (e.g., 'monthly', 'quarterly')")
+    payment_term: str = Field(..., description="Payment term: '年繳', '半年繳', '季繳', or '月繳'")
     vehicle_plate: Optional[str] = Field(None, description="Vehicle/motorcycle plate number")
-    assets: Optional[List[LeaseAssetCreate]] = Field(default=[], description="Assets associated with the lease")
+    assets: Optional[List[LeaseAssetCreate]] = Field(default=[], description="Assets associated with the lease (will be stored as JSONB)")
 
     @model_validator(mode="after")
     def validate_tenant_and_dates(self):
@@ -66,7 +58,7 @@ class LeaseRenew(BaseModel):
     new_monthly_rent: Optional[Decimal] = Field(None, gt=0, description="New monthly rent (optional, uses current if not provided)")
     new_deposit: Optional[Decimal] = Field(None, ge=0, description="New deposit amount (optional)")
     new_pay_rent_on: Optional[int] = Field(None, ge=1, le=31, description="New rent due day (optional)")
-    new_payment_term: Optional[str] = Field(None, description="New payment term (optional)")
+    new_payment_term: Optional[str] = Field(None, description="New payment term: '年繳', '半年繳', '季繳', or '月繳' (optional)")
     new_vehicle_plate: Optional[str] = Field(None, description="New vehicle/motorcycle plate number (optional)")
 
     @field_validator("new_end_date")
@@ -102,7 +94,7 @@ class LeaseTerminate(BaseModel):
 class LeaseTenantResponse(BaseModel):
     """Schema for lease-tenant relationship response"""
     tenant_id: int
-    tenant_role: str  # 'primary' or 'co_tenant'
+    tenant_role: str  # '主要' or '次要'
     joined_at: Optional[date] = None
 
     class Config:
@@ -119,10 +111,10 @@ class LeaseResponse(BaseModel):
     monthly_rent: Decimal
     deposit: Decimal
     pay_rent_on: int
-    payment_term: str
-    status: str
+    payment_term: str  # '年繳', '半年繳', '季繳', '月繳'
+    status: str  # '有效', '終止', '到期'
     vehicle_plate: Optional[str] = None
-    assets: List[LeaseAssetResponse] = []
+    assets: Optional[List[Dict[str, Any]]] = None  # JSONB array: [{"type": "鑰匙", "quantity": 1}, ...]
     tenants: List[LeaseTenantResponse] = []
     # For backward compatibility, include primary tenant_id (will be populated by service layer)
     tenant_id: Optional[int] = None

@@ -1,7 +1,13 @@
 # app/models/cash_flow.py
 from sqlalchemy import Column, BigInteger, String, Date, Numeric, ForeignKey, CheckConstraint, Index, Text
+from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import relationship
 from app.models.base import Base, AuditMixin
+
+# Define ENUM types
+cash_direction_type = ENUM('收入', '支出', '轉帳', name='cash_direction_type', create_type=False)
+cash_account_type = ENUM('現金', '銀行', '第三方支付', name='cash_account_type', create_type=False)
+payment_method_type = ENUM('現金', '銀行轉帳', 'LINE Pay', '其他', name='payment_method_type', create_type=False)
 
 
 class CashFlowCategory(Base):
@@ -10,15 +16,11 @@ class CashFlowCategory(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     code = Column(String, nullable=False, unique=True)
     name = Column(String, nullable=False)
-    direction = Column(String, nullable=False)  # 'in', 'out', 'transfer'
+    direction = Column(cash_direction_type, nullable=False)  # '收入', '支出', '轉帳'
     description = Column(Text, nullable=True)
 
     # Relationships
     cash_flows = relationship("CashFlow", back_populates="category")
-
-    __table_args__ = (
-        CheckConstraint("direction IN ('in', 'out', 'transfer')", name="check_direction"),
-    )
 
 
 class CashAccount(Base):
@@ -26,15 +28,11 @@ class CashAccount(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    account_type = Column(String, nullable=False)  # 'cash', 'bank', 'third_party'
+    account_type = Column(cash_account_type, nullable=False)  # '現金', '銀行', '第三方支付'
     note = Column(Text, nullable=True)
 
     # Relationships
     cash_flows = relationship("CashFlow", back_populates="cash_account")
-
-    __table_args__ = (
-        CheckConstraint("account_type IN ('cash', 'bank', 'third_party')", name="check_account_type"),
-    )
 
 
 class CashFlow(Base, AuditMixin):
@@ -49,7 +47,7 @@ class CashFlow(Base, AuditMixin):
     invoice_id = Column(BigInteger, ForeignKey("invoice.id"), nullable=True)
     flow_date = Column(Date, nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
-    payment_method = Column(String, nullable=False)  # 'cash', 'bank_transfer', 'linepay', 'other'
+    payment_method = Column(payment_method_type, nullable=False)  # '現金', '銀行轉帳', 'LINE Pay', '其他'
     note = Column(Text, nullable=True)
 
     # Relationships
@@ -62,9 +60,8 @@ class CashFlow(Base, AuditMixin):
     attachments = relationship("CashFlowAttachment", back_populates="cash_flow", cascade="all, delete-orphan")
 
     __table_args__ = (
-        CheckConstraint("amount >= 0", name="check_amount_positive"),
-        CheckConstraint("payment_method IN ('cash', 'bank_transfer', 'linepay', 'other')", name="check_payment_method"),
-        CheckConstraint("(room_id IS NULL AND building_id IS NULL) OR (room_id IS NOT NULL AND building_id IS NOT NULL)", name="check_cf_room_requires_building"),
+        CheckConstraint("amount >= 0", name="chk_cf_amount"),
+        CheckConstraint("(room_id IS NULL AND building_id IS NULL) OR (room_id IS NOT NULL AND building_id IS NOT NULL)", name="chk_cf_room_requires_building"),
         Index("idx_cf_date", "flow_date"),
         Index("idx_cf_category", "category_id"),
         Index("idx_cf_account", "cash_account_id"),

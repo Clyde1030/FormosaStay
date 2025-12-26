@@ -2,7 +2,7 @@
 from app.models.building import Building
 from app.models.room import Room
 from app.models.tenant import Tenant, TenantEmergencyContact
-from app.models.lease import Lease, LeaseAsset, LeaseTenant
+from app.models.lease import Lease, LeaseTenant
 from app.models.electricity import ElectricityRate, MeterReading
 from app.models.invoice import Invoice
 from app.models.user import UserAccount, Role, UserRole
@@ -14,7 +14,6 @@ __all__ = [
     "Tenant",
     "TenantEmergencyContact",
     "Lease",
-    "LeaseAsset",
     "LeaseTenant",
     "ElectricityRate",
     "MeterReading",

@@ -8,7 +8,7 @@ class Room(Base, AuditMixin):
     __tablename__ = "room"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    building_id = Column(BigInteger, ForeignKey("building.id", ondelete="CASCADE"), nullable=False)
+    building_id = Column(BigInteger, ForeignKey("building.id", ondelete="RESTRICT"), nullable=False)
     floor_no = Column(Integer, nullable=False)
     room_no = Column(String(1), nullable=False)
     size_ping = Column(Numeric(6, 2), nullable=True)

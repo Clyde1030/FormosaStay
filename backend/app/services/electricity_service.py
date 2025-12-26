@@ -193,13 +193,13 @@ class ElectricityService:
         # For now, we'll return the invoice data to be created with lease_id
         # Default due_date to period_end if not specified
         payment_data = {
-            "category": "electricity",
+            "category": "電費",
             "period_start": period_start,
             "period_end": period_end,
             "due_date": period_end,  # Default due_date to period_end
             "due_amount": bill_amount,
             "paid_amount": Decimal(0),
-            "status": "unpaid",
+            "status": "未交",
             "created_by": created_by,
         }
 
