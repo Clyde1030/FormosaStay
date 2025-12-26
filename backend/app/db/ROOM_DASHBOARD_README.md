@@ -151,7 +151,7 @@ Returns: `v_room_electricity_history` data, optionally filtered by:
 
 1. **Run the SQL file** to create the views:
    ```bash
-   psql -U your_user -d your_database -f backend/app/db/room_dashboard_views.sql
+   psql -U your_user -d your_database -f backend/app/db/views/room_dashboard_views.sql
    ```
 
 2. **Create backend endpoints** in `backend/app/routers/rooms.py`:

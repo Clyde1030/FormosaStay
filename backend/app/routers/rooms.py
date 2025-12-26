@@ -131,7 +131,7 @@ async def get_room_dashboard(room_id: int, db: AsyncSession = Depends(get_db)):
         if "does not exist" in str(e) or "relation" in str(e).lower():
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="SQL views not found. Please run backend/app/db/room_dashboard_views.sql to create the views."
+                detail="SQL views not found. Please run backend/app/db/views/room_dashboard_views.sql to create the views."
             )
         raise
 
@@ -171,7 +171,7 @@ async def get_room_tenant(room_id: int, db: AsyncSession = Depends(get_db)):
         if "does not exist" in str(e) or "relation" in str(e).lower():
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="SQL views not found. Please run backend/app/db/room_dashboard_views.sql to create the views."
+                detail="SQL views not found. Please run backend/app/db/views/room_dashboard_views.sql to create the views."
             )
         raise
 
@@ -210,7 +210,7 @@ async def get_room_payments(
         if "does not exist" in str(e) or "relation" in str(e).lower():
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="SQL views not found. Please run backend/app/db/room_dashboard_views.sql to create the views."
+                detail="SQL views not found. Please run backend/app/db/views/room_dashboard_views.sql to create the views."
             )
         raise
 
@@ -249,6 +249,6 @@ async def get_room_electricity(
         if "does not exist" in str(e) or "relation" in str(e).lower():
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="SQL views not found. Please run backend/app/db/room_dashboard_views.sql to create the views."
+                detail="SQL views not found. Please run backend/app/db/views/room_dashboard_views.sql to create the views."
             )
         raise

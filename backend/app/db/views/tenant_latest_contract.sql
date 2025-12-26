@@ -74,12 +74,8 @@ left join building b on b.id = r.building_id;
 
 
 
+
 select * from alembic_version av 
-
-
-
-
-
 
 
 

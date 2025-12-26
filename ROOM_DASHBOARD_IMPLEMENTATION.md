@@ -40,10 +40,10 @@ Enhanced Room Dashboard:
 
 ```bash
 # Option 1: Using psql directly
-psql -U your_user -d your_database -f backend/app/db/room_dashboard_views.sql
+psql -U your_user -d your_database -f backend/app/db/views/room_dashboard_views.sql
 
 # Option 2: Using Docker
-docker exec -i formosastay-postgres psql -U your_user -d your_database < backend/app/db/room_dashboard_views.sql
+docker exec -i formosastay-postgres psql -U your_user -d your_database < backend/app/db/views/room_dashboard_views.sql
 
 # Option 3: Connect to your database and run the SQL file manually
 ```
