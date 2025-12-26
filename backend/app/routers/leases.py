@@ -29,7 +29,12 @@ async def create_lease(
     The room must not already have an active lease.
     """
     lease = await LeaseService.create_lease(db, lease_data)
-    return LeaseResponse.model_validate(lease)
+    # Extract primary tenant_id for backward compatibility
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+    lease_dict = LeaseResponse.model_validate(lease).model_dump()
+    if primary_tenant:
+        lease_dict['tenant_id'] = primary_tenant.tenant_id
+    return LeaseResponse(**lease_dict)
 
 
 @router.post("/{lease_id}/renew", response_model=LeaseResponse)
@@ -47,7 +52,12 @@ async def renew_lease(
     rent, deposit, or payment terms. Only active leases can be renewed.
     """
     lease = await LeaseService.renew_lease(db, lease_id, renew_data)
-    return LeaseResponse.model_validate(lease)
+    # Extract primary tenant_id for backward compatibility
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+    lease_dict = LeaseResponse.model_validate(lease).model_dump()
+    if primary_tenant:
+        lease_dict['tenant_id'] = primary_tenant.tenant_id
+    return LeaseResponse(**lease_dict)
 
 
 @router.post("/{lease_id}/terminate", response_model=LeaseResponse)
@@ -65,7 +75,12 @@ async def terminate_lease(
     Only active leases can be terminated.
     """
     lease = await LeaseService.terminate_lease(db, lease_id, terminate_data)
-    return LeaseResponse.model_validate(lease)
+    # Extract primary tenant_id for backward compatibility
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+    lease_dict = LeaseResponse.model_validate(lease).model_dump()
+    if primary_tenant:
+        lease_dict['tenant_id'] = primary_tenant.tenant_id
+    return LeaseResponse(**lease_dict)
 
 
 @router.get("/{lease_id}", response_model=LeaseResponse)
@@ -82,7 +97,12 @@ async def get_lease(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Lease with id {lease_id} not found"
         )
-    return LeaseResponse.model_validate(lease)
+    # Extract primary tenant_id for backward compatibility
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+    lease_dict = LeaseResponse.model_validate(lease).model_dump()
+    if primary_tenant:
+        lease_dict['tenant_id'] = primary_tenant.tenant_id
+    return LeaseResponse(**lease_dict)
 
 
 @router.get("/", response_model=List[LeaseResponse])
@@ -102,5 +122,13 @@ async def list_leases(
     leases = await LeaseService.list_leases(
         db, tenant_id=tenant_id, room_id=room_id, status=status, skip=skip, limit=limit
     )
-    return [LeaseResponse.model_validate(lease) for lease in leases]
+    result = []
+    for lease in leases:
+        # Extract primary tenant_id for backward compatibility
+        primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+        lease_dict = LeaseResponse.model_validate(lease).model_dump()
+        if primary_tenant:
+            lease_dict['tenant_id'] = primary_tenant.tenant_id
+        result.append(LeaseResponse(**lease_dict))
+    return result
 

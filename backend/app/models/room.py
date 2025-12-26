@@ -1,5 +1,5 @@
 # app/models/room.py
-from sqlalchemy import Column, BigInteger, Integer, String, Numeric, ForeignKey
+from sqlalchemy import Column, BigInteger, Integer, String, Numeric, ForeignKey, Boolean, Index
 from sqlalchemy.orm import relationship
 from app.models.base import Base, AuditMixin
 
@@ -12,6 +12,7 @@ class Room(Base, AuditMixin):
     floor_no = Column(Integer, nullable=False)
     room_no = Column(String(1), nullable=False)
     size_ping = Column(Numeric(6, 2), nullable=True)
+    is_rentable = Column(Boolean, nullable=False, default=True)
 
     # Relationships
     building = relationship("Building", back_populates="rooms")
@@ -19,4 +20,8 @@ class Room(Base, AuditMixin):
     electricity_rates = relationship("ElectricityRate", back_populates="room", cascade="all, delete-orphan")
     meter_readings = relationship("MeterReading", back_populates="room", cascade="all, delete-orphan")
     cash_flows = relationship("CashFlow", back_populates="room")
+
+    __table_args__ = (
+        Index("uq_room", "building_id", "floor_no", "room_no", unique=True),
+    )
 

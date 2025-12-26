@@ -46,6 +46,7 @@ class CashFlow(Base, AuditMixin):
     lease_id = Column(BigInteger, ForeignKey("lease.id"), nullable=True)
     building_id = Column(BigInteger, ForeignKey("building.id"), nullable=True)
     room_id = Column(BigInteger, ForeignKey("room.id"), nullable=True)
+    invoice_id = Column(BigInteger, ForeignKey("invoice.id"), nullable=True)
     flow_date = Column(Date, nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
     payment_method = Column(String, nullable=False)  # 'cash', 'bank_transfer', 'linepay', 'other'
@@ -57,11 +58,13 @@ class CashFlow(Base, AuditMixin):
     lease = relationship("Lease", back_populates="cash_flows")
     building = relationship("Building", back_populates="cash_flows")
     room = relationship("Room", back_populates="cash_flows")
+    invoice = relationship("Invoice", back_populates="cash_flows")
     attachments = relationship("CashFlowAttachment", back_populates="cash_flow", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint("amount >= 0", name="check_amount_positive"),
         CheckConstraint("payment_method IN ('cash', 'bank_transfer', 'linepay', 'other')", name="check_payment_method"),
+        CheckConstraint("(room_id IS NULL AND building_id IS NULL) OR (room_id IS NOT NULL AND building_id IS NOT NULL)", name="check_cf_room_requires_building"),
         Index("idx_cf_date", "flow_date"),
         Index("idx_cf_category", "category_id"),
         Index("idx_cf_account", "cash_account_id"),

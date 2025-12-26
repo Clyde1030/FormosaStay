@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.models.room import Room
 from app.models.lease import Lease
-from app.models.payment import Payment
+from app.models.invoice import Invoice
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -29,19 +29,19 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
         # Occupancy rate
         occupancy_rate = (occupied / total_rooms * 100) if total_rooms > 0 else 0
         
-        # Overdue payments - handle case where no payments exist
+        # Overdue invoices - handle case where no invoices exist
         try:
-            payments_result = await db.execute(
+            invoices_result = await db.execute(
                 select(
-                    func.sum(Payment.due_amount - Payment.paid_amount).label("total_overdue"),
-                    func.count(Payment.id).label("count")
-                ).where(Payment.status.in_(["unpaid", "partial"]))
+                    func.sum(Invoice.due_amount - Invoice.paid_amount).label("total_overdue"),
+                    func.count(Invoice.id).label("count")
+                ).where(Invoice.status.in_(["unpaid", "partial"])).where(Invoice.deleted_at.is_(None))
             )
-            overdue_data = payments_result.first()
+            overdue_data = invoices_result.first()
             overdue_total = float(overdue_data.total_overdue) if overdue_data and overdue_data.total_overdue else 0
             overdue_count = overdue_data.count if overdue_data else 0
         except Exception as e:
-            # If payment table doesn't exist or has issues, default to 0
+            # If invoice table doesn't exist or has issues, default to 0
             overdue_total = 0
             overdue_count = 0
         

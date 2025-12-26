@@ -2,9 +2,9 @@
 from app.models.building import Building
 from app.models.room import Room
 from app.models.tenant import Tenant, TenantEmergencyContact
-from app.models.lease import Lease, LeaseAsset
+from app.models.lease import Lease, LeaseAsset, LeaseTenant
 from app.models.electricity import ElectricityRate, MeterReading
-from app.models.payment import Payment
+from app.models.invoice import Invoice
 from app.models.user import UserAccount, Role, UserRole
 from app.models.cash_flow import CashFlowCategory, CashAccount, CashFlow, CashFlowAttachment
 
@@ -15,9 +15,10 @@ __all__ = [
     "TenantEmergencyContact",
     "Lease",
     "LeaseAsset",
+    "LeaseTenant",
     "ElectricityRate",
     "MeterReading",
-    "Payment",
+    "Invoice",
     "UserAccount",
     "Role",
     "UserRole",

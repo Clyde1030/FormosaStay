@@ -4,10 +4,10 @@ from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 
-from app.models.lease import Lease, LeaseAsset
+from app.models.lease import Lease, LeaseAsset, LeaseTenant
 from app.models.room import Room
 from app.models.tenant import Tenant
-from app.models.payment import Payment
+from app.models.invoice import Invoice
 from app.schemas.lease import LeaseCreate, LeaseRenew, LeaseTerminate
 from app.services.electricity_service import ElectricityService
 from app.services.tenant_service import TenantService
@@ -86,20 +86,31 @@ class LeaseService:
             .where(
                 and_(
                     Lease.room_id == lease_data.room_id,
-                    Lease.status == "active"
+                    Lease.status == "active",
+                    Lease.deleted_at.is_(None)
                 )
             )
-            .options(selectinload(Lease.tenant))
+            .options(selectinload(Lease.tenants).selectinload(LeaseTenant.tenant))
         )
         existing_lease = existing_lease_result.scalar_one_or_none()
         if existing_lease:
-            existing_tenant_name = f"{existing_lease.tenant.first_name} {existing_lease.tenant.last_name}"
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Room {lease_data.room_id} already has an active lease (lease_id: {existing_lease.id}). "
-                       f"Current tenant: {existing_tenant_name} (ID: {existing_lease.tenant.id}). "
-                       f"{tenant_info}"
-            )
+            # Get primary tenant
+            primary_tenant_relation = next((lt for lt in existing_lease.tenants if lt.tenant_role == 'primary'), None)
+            if primary_tenant_relation:
+                existing_tenant = primary_tenant_relation.tenant
+                existing_tenant_name = f"{existing_tenant.first_name} {existing_tenant.last_name}"
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail=f"Room {lease_data.room_id} already has an active lease (lease_id: {existing_lease.id}). "
+                           f"Current tenant: {existing_tenant_name} (ID: {existing_tenant.id}). "
+                           f"{tenant_info}"
+                )
+            else:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail=f"Room {lease_data.room_id} already has an active lease (lease_id: {existing_lease.id}). "
+                           f"{tenant_info}"
+                )
 
         # Validate dates
         if lease_data.end_date <= lease_data.start_date:
@@ -110,7 +121,6 @@ class LeaseService:
 
         # Create new lease
         new_lease = Lease(
-            tenant_id=tenant.id,
             room_id=lease_data.room_id,
             start_date=lease_data.start_date,
             end_date=lease_data.end_date,
@@ -126,6 +136,15 @@ class LeaseService:
         db.add(new_lease)
         await db.flush()  # Flush to get the lease ID
 
+        # Create lease_tenant relationship (primary tenant)
+        lease_tenant = LeaseTenant(
+            lease_id=new_lease.id,
+            tenant_id=tenant.id,
+            tenant_role="primary",
+            joined_at=lease_data.start_date,
+        )
+        db.add(lease_tenant)
+
         # Create lease assets if provided
         if lease_data.assets:
             for asset_data in lease_data.assets:
@@ -140,7 +159,7 @@ class LeaseService:
         await db.refresh(new_lease)
 
         # Load relationships for response
-        await db.refresh(new_lease, ["assets", "tenant", "room"])
+        await db.refresh(new_lease, ["assets", "tenants", "room"])
         return new_lease
 
     @staticmethod
@@ -164,7 +183,7 @@ class LeaseService:
             .where(Lease.id == lease_id)
             .options(
                 selectinload(Lease.assets),
-                selectinload(Lease.tenant)
+                selectinload(Lease.tenants).selectinload(LeaseTenant.tenant)
             )
         )
         lease = result.scalar_one_or_none()
@@ -175,8 +194,14 @@ class LeaseService:
                 detail=f"Lease with id {lease_id} not found"
             )
 
-        tenant_name = f"{lease.tenant.first_name} {lease.tenant.last_name}"
-        tenant_info = f"Tenant: {tenant_name} (ID: {lease.tenant.id})"
+        # Get primary tenant for info messages
+        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+        if primary_tenant_relation:
+            tenant = primary_tenant_relation.tenant
+            tenant_name = f"{tenant.first_name} {tenant.last_name}"
+            tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
+        else:
+            tenant_info = f"Lease ID: {lease_id}"
 
         if lease.status != "active":
             raise HTTPException(
@@ -231,7 +256,7 @@ class LeaseService:
             .where(Lease.id == lease_id)
             .options(
                 selectinload(Lease.assets),
-                selectinload(Lease.tenant),
+                selectinload(Lease.tenants).selectinload(LeaseTenant.tenant),
                 selectinload(Lease.room)
             )
         )
@@ -243,8 +268,14 @@ class LeaseService:
                 detail=f"Lease with id {lease_id} not found"
             )
 
-        tenant_name = f"{lease.tenant.first_name} {lease.tenant.last_name}"
-        tenant_info = f"Tenant: {tenant_name} (ID: {lease.tenant.id})"
+        # Get primary tenant for info messages
+        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+        if primary_tenant_relation:
+            tenant = primary_tenant_relation.tenant
+            tenant_name = f"{tenant.first_name} {tenant.last_name}"
+            tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
+        else:
+            tenant_info = f"Lease ID: {lease_id}"
 
         if lease.status != "active":
             raise HTTPException(
@@ -284,18 +315,19 @@ class LeaseService:
                     created_by=updated_by
                 )
 
-                # Create payment record
-                payment = Payment(
+                # Create invoice record
+                invoice = Invoice(
                     lease_id=lease.id,
                     category=payment_data["category"],
                     period_start=payment_data["period_start"],
                     period_end=payment_data["period_end"],
+                    due_date=payment_data.get("due_date", payment_data["period_end"]),  # Default due_date to period_end if not provided
                     due_amount=payment_data["due_amount"],
                     paid_amount=payment_data["paid_amount"],
                     status=payment_data["status"],
                     created_by=payment_data["created_by"],
                 )
-                db.add(payment)
+                db.add(invoice)
             except HTTPException:
                 # Re-raise HTTP exceptions (they already have proper error messages)
                 raise
@@ -326,7 +358,7 @@ class LeaseService:
             .where(Lease.id == lease_id)
             .options(
                 selectinload(Lease.assets),
-                selectinload(Lease.tenant),
+                selectinload(Lease.tenants).selectinload(LeaseTenant.tenant),
                 selectinload(Lease.room)
             )
         )
@@ -344,13 +376,14 @@ class LeaseService:
         """List leases with optional filters"""
         query = select(Lease).options(
             selectinload(Lease.assets),
-            selectinload(Lease.tenant),
+            selectinload(Lease.tenants).selectinload(LeaseTenant.tenant),
             selectinload(Lease.room)
         )
 
         conditions = []
         if tenant_id:
-            conditions.append(Lease.tenant_id == tenant_id)
+            # Filter by tenant through lease_tenant relationship
+            query = query.join(LeaseTenant).where(LeaseTenant.tenant_id == tenant_id)
         if room_id:
             conditions.append(Lease.room_id == room_id)
         if status:

@@ -19,7 +19,7 @@ class Tenant(Base, AuditMixin):
     address = Column(Text, nullable=False)
 
     # Relationships
-    leases = rel("Lease", back_populates="tenant")
+    lease_tenants = rel("LeaseTenant", back_populates="tenant")
     emergency_contacts = rel("TenantEmergencyContact", back_populates="tenant", cascade="all, delete-orphan")
 
 

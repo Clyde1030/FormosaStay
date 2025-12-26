@@ -99,10 +99,19 @@ class LeaseTerminate(BaseModel):
         return v
 
 
+class LeaseTenantResponse(BaseModel):
+    """Schema for lease-tenant relationship response"""
+    tenant_id: int
+    tenant_role: str  # 'primary' or 'co_tenant'
+    joined_at: Optional[date] = None
+
+    class Config:
+        from_attributes = True
+
+
 class LeaseResponse(BaseModel):
     """Schema for lease response"""
     id: int
-    tenant_id: int
     room_id: int
     start_date: date
     end_date: date
@@ -114,6 +123,9 @@ class LeaseResponse(BaseModel):
     status: str
     vehicle_plate: Optional[str] = None
     assets: List[LeaseAssetResponse] = []
+    tenants: List[LeaseTenantResponse] = []
+    # For backward compatibility, include primary tenant_id (will be populated by service layer)
+    tenant_id: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

@@ -8,7 +8,6 @@ class Lease(Base, AuditMixin):
     __tablename__ = "lease"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    tenant_id = Column(BigInteger, ForeignKey("tenant.id"), nullable=False)
     room_id = Column(BigInteger, ForeignKey("room.id"), nullable=False)
 
     start_date = Column(Date, nullable=False)
@@ -23,17 +22,39 @@ class Lease(Base, AuditMixin):
     vehicle_plate = Column(String, nullable=True)  # Vehicle/motorcycle plate number
 
     # Relationships
-    tenant = relationship("Tenant", back_populates="leases")
     room = relationship("Room", back_populates="leases")
+    tenants = relationship("LeaseTenant", back_populates="lease", cascade="all, delete-orphan")
     assets = relationship("LeaseAsset", back_populates="lease", cascade="all, delete-orphan")
-    payments = relationship("Payment", back_populates="lease")  # No cascade - keep payments for audit even if lease is deleted
+    invoices = relationship("Invoice", back_populates="lease")  # No cascade - keep invoices for audit even if lease is deleted
     cash_flows = relationship("CashFlow", back_populates="lease")
 
     __table_args__ = (
+        CheckConstraint("end_date > start_date", name="check_end_after_start"),
+        CheckConstraint("early_termination_date IS NULL OR (early_termination_date >= start_date AND early_termination_date <= end_date)", name="check_early_termination_date"),
         CheckConstraint("pay_rent_on BETWEEN 1 AND 31", name="check_pay_rent_on"),
+        CheckConstraint("monthly_rent >= 0", name="check_monthly_rent_positive"),
+        CheckConstraint("deposit >= 0", name="check_deposit_positive"),
         CheckConstraint("status IN ('active','terminated','expired')", name="check_status"),
         Index("idx_lease_room", "room_id"),
-        Index("uq_active_lease_per_room", "room_id", unique=True, postgresql_where=text("status = 'active'")),
+        Index("uq_active_lease_per_room", "room_id", unique=True, postgresql_where=text("status = 'active' AND deleted_at IS NULL")),
+    )
+
+
+class LeaseTenant(Base):
+    __tablename__ = "lease_tenant"
+
+    lease_id = Column(BigInteger, ForeignKey("lease.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenant.id", ondelete="RESTRICT"), primary_key=True)
+    tenant_role = Column(String, nullable=False)  # 'primary', 'co_tenant'
+    joined_at = Column(Date, nullable=True, server_default=text("CURRENT_DATE"))
+
+    # Relationships
+    lease = relationship("Lease", back_populates="tenants")
+    tenant = relationship("Tenant", back_populates="lease_tenants")
+
+    __table_args__ = (
+        CheckConstraint("tenant_role IN ('primary','co_tenant')", name="check_tenant_role"),
+        Index("uq_primary_tenant", "lease_id", unique=True, postgresql_where=text("tenant_role = 'primary'")),
     )
 
 

@@ -188,13 +188,15 @@ class ElectricityService:
             period_start = previous_reading_obj.read_date
         period_end = reading_date
 
-        # Create payment record
+        # Create invoice record data
         # Note: We need lease_id, but we'll get it from the calling function
-        # For now, we'll return the payment data to be created with lease_id
+        # For now, we'll return the invoice data to be created with lease_id
+        # Default due_date to period_end if not specified
         payment_data = {
             "category": "electricity",
             "period_start": period_start,
             "period_end": period_end,
+            "due_date": period_end,  # Default due_date to period_end
             "due_amount": bill_amount,
             "paid_amount": Decimal(0),
             "status": "unpaid",

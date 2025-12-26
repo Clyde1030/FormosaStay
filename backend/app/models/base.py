@@ -14,7 +14,8 @@ class TimestampMixin:
 
 
 class AuditMixin(TimestampMixin):
-    """Mixin for audit fields (created_by, updated_by)"""
+    """Mixin for audit fields (created_by, updated_by, deleted_at)"""
     created_by = Column(BigInteger, nullable=True)
     updated_by = Column(BigInteger, nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
