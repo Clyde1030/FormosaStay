@@ -289,10 +289,12 @@ export const createTenant = async (tenant: Partial<Tenant>) => {
 
 export const updateTenant = async (id: number, updates: Partial<Tenant>) => {
     // Map frontend fields to backend schema
+    // Note: first_name and last_name should always be present in the updates object
+    // since they're part of the tenant object structure
     const tenantData: any = {
         first_name: updates.first_name || '',
         last_name: updates.last_name || '',
-        gender: updates.gender || 'M',
+        gender: updates.gender || '男', // Default to '男' (valid Chinese value)
         birthday: updates.birthday || '',
         personal_id: updates.personal_id || updates.idNumber || '',
         phone: updates.phone || updates.phoneNumber || '',

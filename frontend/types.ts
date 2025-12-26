@@ -74,7 +74,6 @@ export interface Tenant {
     line_id?: string;
     lineId?: string;
     address: string;
-    motorcyclePlate?: string;
     emergency_contacts?: EmergencyContact[];
     created_at?: string;
 }

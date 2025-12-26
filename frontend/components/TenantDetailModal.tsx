@@ -118,7 +118,22 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
         setError(null);
         
         try {
-            await updateTenant(tenant.id, editTenant);
+            // Ensure first_name and last_name are preserved from editTenant
+            // The name field is just for display, first_name and last_name are the actual fields
+            const tenantUpdates = {
+                ...editTenant,
+                // Make sure first_name and last_name are explicitly included
+                first_name: editTenant.first_name || tenant.first_name || '',
+                last_name: editTenant.last_name || tenant.last_name || '',
+                // Ensure all required fields are present
+                gender: editTenant.gender || tenant.gender || '男',
+                birthday: editTenant.birthday || tenant.birthday || '',
+                personal_id: editTenant.personal_id || editTenant.idNumber || tenant.personal_id || '',
+                phone: editTenant.phone || editTenant.phoneNumber || tenant.phone || '',
+                address: editTenant.address || tenant.address || ''
+            };
+            
+            await updateTenant(tenant.id, tenantUpdates);
             if (tenant.currentContract && editContract) {
                 // Fix: Map UI properties back to backend schema fields for updateContract
                 await updateContract(tenant.currentContract.id, {
@@ -251,14 +266,6 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             <input className="w-full border rounded px-2 py-1" value={editTenant.address} onChange={e => setEditTenant({...editTenant, address: e.target.value})} />
                                         ) : (
                                             <p className="text-slate-800 text-sm">{tenant.address}</p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-slate-500 uppercase font-bold">Motorcycle</label>
-                                        {isEditing ? (
-                                            <input className="w-full border rounded px-2 py-1" value={editTenant.motorcyclePlate || ''} onChange={e => setEditTenant({...editTenant, motorcyclePlate: e.target.value})} />
-                                        ) : (
-                                            <p className="text-slate-800">{tenant.motorcyclePlate || 'N/A'}</p>
                                         )}
                                     </div>
                                     <div className="col-span-2 mt-2 pt-2 border-t border-slate-200">

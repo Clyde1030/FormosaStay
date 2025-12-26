@@ -228,7 +228,21 @@ async def update_tenant(
     )
     
     # Reload with relationships
-    await db.refresh(updated_tenant, ["emergency_contacts", "lease_tenants"])
+    # Note: If tenant has a lease, we need to refresh lease_tenants carefully
+    # to avoid issues if the lease relationship has constraints
+    try:
+        await db.refresh(updated_tenant, ["emergency_contacts", "lease_tenants"])
+    except Exception as e:
+        # If refresh fails, still try to get the tenant data
+        # This can happen if there are relationship loading issues
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Could not refresh all relationships for tenant {tenant_id}: {str(e)}")
+        # Try to refresh just emergency_contacts
+        try:
+            await db.refresh(updated_tenant, ["emergency_contacts"])
+        except:
+            pass
     
     # Get active lease through lease_tenants relationship
     active_lease = None

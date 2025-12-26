@@ -84,6 +84,23 @@ class TenantService:
                 await db.flush()
         
         # Update tenant fields
+        # Only update personal_id if it's different to avoid UNIQUE constraint violations
+        if tenant.personal_id != tenant_data.personal_id:
+            # Check if the new personal_id already exists
+            existing_tenant = await db.execute(
+                select(Tenant).where(
+                    and_(
+                        Tenant.personal_id == tenant_data.personal_id,
+                        Tenant.id != tenant.id
+                    )
+                )
+            )
+            if existing_tenant.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail=f"Personal ID {tenant_data.personal_id} already exists for another tenant"
+                )
+        
         tenant.first_name = tenant_data.first_name
         tenant.last_name = tenant_data.last_name
         tenant.gender = tenant_data.gender
