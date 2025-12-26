@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Plus, Trash2 } from 'lucide-react';
 import { createContract, getTenants } from '../services/propertyService';
 import { Tenant, PaymentFrequency } from '../types';
+
+interface LeaseAsset {
+    type: '鑰匙' | '磁扣' | '遙控器';
+    quantity: number;
+}
 
 interface Props {
     roomId: number | string; // Can be number or string (from Room.id which is 'any')
@@ -22,6 +27,7 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
         vehicle_plate: '',
     });
     const [tenants, setTenants] = useState<Tenant[]>([]);
+    const [assets, setAssets] = useState<LeaseAsset[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loadingTenants, setLoadingTenants] = useState(true);
@@ -60,6 +66,7 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
                 pay_rent_on: parseInt(formData.pay_rent_on),
                 payment_term: formData.payment_term,
                 vehicle_plate: formData.vehicle_plate.trim() || undefined,
+                assets: assets.length > 0 ? assets : undefined,
             };
 
             await createContract(contractData);
@@ -77,14 +84,19 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+                {/* Fixed Header */}
+                <div className="flex justify-between items-center p-6 pb-4 border-b border-slate-200 flex-shrink-0">
                     <h3 className="text-xl font-bold text-slate-800">Create New Contract</h3>
-                    <button onClick={onClose}><X className="text-slate-400 hover:text-slate-600"/></button>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+                        <X size={20} />
+                    </button>
                 </div>
                 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Scrollable Content */}
+                <div className="overflow-y-auto flex-1 px-6 py-4">
+                    <form onSubmit={handleSubmit} id="contract-form" className="space-y-4">
                     {error && (
                         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
                             {error}
@@ -202,31 +214,101 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
                         />
                     </div>
 
-                    <div className="pt-4 flex gap-3">
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="flex-1 bg-brand-600 text-white py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="animate-spin" size={16} />
-                                    Creating...
-                                </>
-                            ) : (
-                                'Create Contract'
-                            )}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            disabled={isSubmitting}
-                            className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
-                        >
-                            Cancel
-                        </button>
+                    {/* Assets Section */}
+                    <div className="border-t border-slate-200 pt-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="block text-sm font-medium text-slate-700">Lease Assets (租賃物品)</label>
+                            <button
+                                type="button"
+                                onClick={() => setAssets([...assets, { type: '鑰匙', quantity: 1 }])}
+                                className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700 font-medium transition-colors"
+                            >
+                                <Plus size={16} />
+                                Add Asset
+                            </button>
+                        </div>
+                        
+                        {assets.map((asset, index) => (
+                            <div key={index} className="mb-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-medium text-slate-600">Asset {index + 1}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAssets(assets.filter((_, i) => i !== index))}
+                                        className="text-red-500 hover:text-red-700 transition-colors"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Type *</label>
+                                        <select
+                                            required
+                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                            value={asset.type}
+                                            onChange={e => {
+                                                const updated = [...assets];
+                                                updated[index].type = e.target.value as '鑰匙' | '磁扣' | '遙控器';
+                                                setAssets(updated);
+                                            }}
+                                        >
+                                            <option value="鑰匙">鑰匙 (Key)</option>
+                                            <option value="磁扣">磁扣 (Card)</option>
+                                            <option value="遙控器">遙控器 (Remote)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Quantity *</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            required
+                                            className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                            value={asset.quantity}
+                                            onChange={e => {
+                                                const updated = [...assets];
+                                                updated[index].quantity = parseInt(e.target.value) || 1;
+                                                setAssets(updated);
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {assets.length === 0 && (
+                            <p className="text-xs text-slate-500 italic">No assets added. Click "Add Asset" to add items like keys, cards, or remotes.</p>
+                        )}
                     </div>
-                </form>
+                    </form>
+                </div>
+
+                {/* Fixed Footer */}
+                <div className="p-6 pt-4 border-t border-slate-200 flex gap-3 flex-shrink-0 bg-white rounded-b-xl">
+                    <button
+                        type="submit"
+                        form="contract-form"
+                        disabled={isSubmitting}
+                        className="flex-1 bg-brand-600 text-white py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="animate-spin" size={16} />
+                                Creating...
+                            </>
+                        ) : (
+                            'Create Contract'
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -31,9 +31,33 @@ async def create_lease(
     lease = await LeaseService.create_lease(db, lease_data)
     # Extract primary tenant_id for backward compatibility
     primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
-    lease_dict = LeaseResponse.model_validate(lease).model_dump()
-    if primary_tenant:
-        lease_dict['tenant_id'] = primary_tenant.tenant_id
+    
+    # Build lease dict manually to handle datetime conversion
+    lease_dict = {
+        'id': lease.id,
+        'room_id': lease.room_id,
+        'start_date': lease.start_date,
+        'end_date': lease.end_date,
+        'early_termination_date': lease.early_termination_date,
+        'monthly_rent': lease.monthly_rent,
+        'deposit': lease.deposit,
+        'pay_rent_on': lease.pay_rent_on,
+        'payment_term': lease.payment_term,
+        'status': lease.status,
+        'vehicle_plate': lease.vehicle_plate,
+        'assets': lease.assets,
+        'tenants': [
+            {
+                'tenant_id': lt.tenant_id,
+                'tenant_role': lt.tenant_role,
+                'joined_at': lt.joined_at
+            }
+            for lt in lease.tenants
+        ],
+        'tenant_id': primary_tenant.tenant_id if primary_tenant else None,
+        'created_at': lease.created_at.isoformat() if lease.created_at else None,
+        'updated_at': lease.updated_at.isoformat() if lease.updated_at else None,
+    }
     return LeaseResponse(**lease_dict)
 
 
@@ -54,9 +78,33 @@ async def renew_lease(
     lease = await LeaseService.renew_lease(db, lease_id, renew_data)
     # Extract primary tenant_id for backward compatibility
     primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
-    lease_dict = LeaseResponse.model_validate(lease).model_dump()
-    if primary_tenant:
-        lease_dict['tenant_id'] = primary_tenant.tenant_id
+    
+    # Build lease dict manually to handle datetime conversion
+    lease_dict = {
+        'id': lease.id,
+        'room_id': lease.room_id,
+        'start_date': lease.start_date,
+        'end_date': lease.end_date,
+        'early_termination_date': lease.early_termination_date,
+        'monthly_rent': lease.monthly_rent,
+        'deposit': lease.deposit,
+        'pay_rent_on': lease.pay_rent_on,
+        'payment_term': lease.payment_term,
+        'status': lease.status,
+        'vehicle_plate': lease.vehicle_plate,
+        'assets': lease.assets,
+        'tenants': [
+            {
+                'tenant_id': lt.tenant_id,
+                'tenant_role': lt.tenant_role,
+                'joined_at': lt.joined_at
+            }
+            for lt in lease.tenants
+        ],
+        'tenant_id': primary_tenant.tenant_id if primary_tenant else None,
+        'created_at': lease.created_at.isoformat() if lease.created_at else None,
+        'updated_at': lease.updated_at.isoformat() if lease.updated_at else None,
+    }
     return LeaseResponse(**lease_dict)
 
 
@@ -77,9 +125,33 @@ async def terminate_lease(
     lease = await LeaseService.terminate_lease(db, lease_id, terminate_data)
     # Extract primary tenant_id for backward compatibility
     primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
-    lease_dict = LeaseResponse.model_validate(lease).model_dump()
-    if primary_tenant:
-        lease_dict['tenant_id'] = primary_tenant.tenant_id
+    
+    # Build lease dict manually to handle datetime conversion
+    lease_dict = {
+        'id': lease.id,
+        'room_id': lease.room_id,
+        'start_date': lease.start_date,
+        'end_date': lease.end_date,
+        'early_termination_date': lease.early_termination_date,
+        'monthly_rent': lease.monthly_rent,
+        'deposit': lease.deposit,
+        'pay_rent_on': lease.pay_rent_on,
+        'payment_term': lease.payment_term,
+        'status': lease.status,
+        'vehicle_plate': lease.vehicle_plate,
+        'assets': lease.assets,
+        'tenants': [
+            {
+                'tenant_id': lt.tenant_id,
+                'tenant_role': lt.tenant_role,
+                'joined_at': lt.joined_at
+            }
+            for lt in lease.tenants
+        ],
+        'tenant_id': primary_tenant.tenant_id if primary_tenant else None,
+        'created_at': lease.created_at.isoformat() if lease.created_at else None,
+        'updated_at': lease.updated_at.isoformat() if lease.updated_at else None,
+    }
     return LeaseResponse(**lease_dict)
 
 
@@ -99,9 +171,33 @@ async def get_lease(
         )
     # Extract primary tenant_id for backward compatibility
     primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
-    lease_dict = LeaseResponse.model_validate(lease).model_dump()
-    if primary_tenant:
-        lease_dict['tenant_id'] = primary_tenant.tenant_id
+    
+    # Build lease dict manually to handle datetime conversion
+    lease_dict = {
+        'id': lease.id,
+        'room_id': lease.room_id,
+        'start_date': lease.start_date,
+        'end_date': lease.end_date,
+        'early_termination_date': lease.early_termination_date,
+        'monthly_rent': lease.monthly_rent,
+        'deposit': lease.deposit,
+        'pay_rent_on': lease.pay_rent_on,
+        'payment_term': lease.payment_term,
+        'status': lease.status,
+        'vehicle_plate': lease.vehicle_plate,
+        'assets': lease.assets,
+        'tenants': [
+            {
+                'tenant_id': lt.tenant_id,
+                'tenant_role': lt.tenant_role,
+                'joined_at': lt.joined_at
+            }
+            for lt in lease.tenants
+        ],
+        'tenant_id': primary_tenant.tenant_id if primary_tenant else None,
+        'created_at': lease.created_at.isoformat() if lease.created_at else None,
+        'updated_at': lease.updated_at.isoformat() if lease.updated_at else None,
+    }
     return LeaseResponse(**lease_dict)
 
 
@@ -125,10 +221,34 @@ async def list_leases(
     result = []
     for lease in leases:
         # Extract primary tenant_id for backward compatibility
-        primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
-        lease_dict = LeaseResponse.model_validate(lease).model_dump()
-        if primary_tenant:
-            lease_dict['tenant_id'] = primary_tenant.tenant_id
+        primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
+        
+        # Build lease dict manually to handle datetime conversion
+        lease_dict = {
+            'id': lease.id,
+            'room_id': lease.room_id,
+            'start_date': lease.start_date,
+            'end_date': lease.end_date,
+            'early_termination_date': lease.early_termination_date,
+            'monthly_rent': lease.monthly_rent,
+            'deposit': lease.deposit,
+            'pay_rent_on': lease.pay_rent_on,
+            'payment_term': lease.payment_term,
+            'status': lease.status,
+            'vehicle_plate': lease.vehicle_plate,
+            'assets': lease.assets,
+            'tenants': [
+                {
+                    'tenant_id': lt.tenant_id,
+                    'tenant_role': lt.tenant_role,
+                    'joined_at': lt.joined_at
+                }
+                for lt in lease.tenants
+            ],
+            'tenant_id': primary_tenant.tenant_id if primary_tenant else None,
+            'created_at': lease.created_at.isoformat() if lease.created_at else None,
+            'updated_at': lease.updated_at.isoformat() if lease.updated_at else None,
+        }
         result.append(LeaseResponse(**lease_dict))
     return result
 

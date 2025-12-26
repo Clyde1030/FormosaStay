@@ -120,8 +120,10 @@ class LeaseService:
             )
 
         # Convert assets to JSONB format
+        # If assets is empty or None, set to None (SQL NULL)
+        # Otherwise, convert to list of dicts
         assets_jsonb = None
-        if lease_data.assets:
+        if lease_data.assets and len(lease_data.assets) > 0:
             assets_jsonb = [
                 {"type": asset.type, "quantity": asset.quantity}
                 for asset in lease_data.assets

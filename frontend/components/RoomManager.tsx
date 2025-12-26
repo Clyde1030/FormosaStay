@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getBuildings, getRooms, getTenantInRoom, getTransactionsByRoom } from '../services/propertyService';
+import { getBuildings, getRooms, getTenantInRoom, getTransactionsByRoom, getRoomElectricityHistory } from '../services/propertyService';
 import { Room, Building, TenantWithContract, Transaction } from '../types';
 import { User, Zap, DollarSign, X, ArrowRight, MapPin, Maximize, FilePlus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Area, Legend } from 'recharts';
@@ -77,23 +77,34 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
     const [room, setRoom] = useState<Room | null>(null);
     const [building, setBuilding] = useState<Building | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [electricityData, setElectricityData] = useState<any[]>([]);
     const [isTenantModalOpen, setIsTenantModalOpen] = useState(false);
     const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const loadData = async () => {
-            const [t, rs, txs, bs] = await Promise.all([
-                getTenantInRoom(roomId),
-                getRooms(),
-                getTransactionsByRoom(roomId),
-                getBuildings()
-            ]);
-            const r = rs.find(item => item.id === roomId) || null;
-            setTenant(t);
-            setRoom(r);
-            setTransactions(txs);
-            if (r) {
-                setBuilding(bs.find(b => b.id === r.building_id) || null);
+            setLoading(true);
+            try {
+                const [t, rs, txs, elec, bs] = await Promise.all([
+                    getTenantInRoom(roomId),
+                    getRooms(),
+                    getTransactionsByRoom(roomId),
+                    getRoomElectricityHistory(roomId),
+                    getBuildings()
+                ]);
+                const r = rs.find(item => item.id === roomId) || null;
+                setTenant(t);
+                setRoom(r);
+                setTransactions(txs);
+                setElectricityData(elec);
+                if (r) {
+                    setBuilding(bs.find(b => b.id === r.building_id) || null);
+                }
+            } catch (error) {
+                console.error('Error loading room data:', error);
+            } finally {
+                setLoading(false);
             }
         };
         loadData();
@@ -107,13 +118,16 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
         periodEnd: t.periodEnd
     })).reverse();
 
-    const elecData = transactions.filter(t => t.type === 'Electricity').map(t => ({
-        date: t.dueDate,
-        usage: (t.readingEnd || 0) - (t.readingStart || 0),
-        cost: t.amount,
-        periodStart: t.periodStart,
-        periodEnd: t.periodEnd
-    })).reverse();
+    // Use electricity history from the new endpoint
+    const elecData = electricityData.map(item => ({
+        date: item.date,
+        usage: item.usage,
+        cost: item.cost,
+        periodStart: item.periodStart,
+        periodEnd: item.periodEnd,
+        readingStart: item.readingStart,
+        readingEnd: item.readingEnd
+    }));
 
     const CustomTooltip = ({ active, payload }: any) => {
         if (active && payload && payload.length) {
@@ -121,16 +135,39 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
             return (
                 <div className="bg-white p-3 border border-slate-200 shadow-lg rounded-lg text-xs z-50">
                     <p className="font-bold text-slate-800 mb-1">{data.date}</p>
-                    <p className="text-slate-600">Amount: <span className="font-medium">NT$ {data.amount.toLocaleString()}</span></p>
+                    {data.amount !== undefined && (
+                        <p className="text-slate-600">Amount: <span className="font-medium">NT$ {data.amount.toLocaleString()}</span></p>
+                    )}
+                    {data.cost !== undefined && (
+                        <p className="text-slate-600">Cost: <span className="font-medium">NT$ {data.cost.toLocaleString()}</span></p>
+                    )}
+                    {data.usage !== undefined && (
+                        <p className="text-slate-600">Usage: <span className="font-medium">{data.usage.toLocaleString()} kWh</span></p>
+                    )}
                     {data.periodStart && (
                         <p className="text-slate-500 mt-1">Period: {data.periodStart} ~ {data.periodEnd}</p>
                     )}
-                    <p className={`mt-1 font-medium ${data.status === 'Paid' ? 'text-emerald-600' : 'text-red-600'}`}>{data.status}</p>
+                    {data.status && (
+                        <p className={`mt-1 font-medium ${data.status === 'Paid' ? 'text-emerald-600' : 'text-red-600'}`}>{data.status}</p>
+                    )}
                 </div>
             );
         }
         return null;
     };
+
+    if (loading) {
+        return (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex justify-end">
+                <div className="w-full max-w-4xl bg-white h-full shadow-2xl flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4"></div>
+                        <p className="text-slate-600">Loading room data...</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex justify-end">
@@ -202,42 +239,54 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                         <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                             <DollarSign className="text-indigo-500" /> Rent Payment History
                         </h3>
-                        <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={rentData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="date" />
-                                    <YAxis />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Bar dataKey="amount" fill="#6366f1">
-                                        {rentData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.status === 'Paid' ? '#10b981' : '#ef4444'} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
+                        {rentData.length > 0 ? (
+                            <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={rentData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="date" />
+                                        <YAxis />
+                                        <Tooltip content={<CustomTooltip />} />
+                                        <Bar dataKey="amount" fill="#6366f1">
+                                            {rentData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.status === 'Paid' ? '#10b981' : '#ef4444'} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        ) : (
+                            <div className="h-64 flex items-center justify-center text-slate-500">
+                                <p>No payment history available</p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Electric Chart */}
-                     <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
                         <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                             <Zap className="text-yellow-500" /> Electricity Usage & Cost
                         </h3>
-                        <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <ComposedChart data={elecData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="date" />
-                                    <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-                                    <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Legend />
-                                    <Area yAxisId="left" type="monotone" dataKey="cost" fill="#8884d8" stroke="#8884d8" name="Bill ($)" />
-                                    <Bar yAxisId="right" dataKey="usage" barSize={20} fill="#82ca9d" name="Usage (deg)" />
-                                </ComposedChart>
-                            </ResponsiveContainer>
-                        </div>
+                        {elecData.length > 0 ? (
+                            <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={elecData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="date" />
+                                        <YAxis yAxisId="left" orientation="left" stroke="#8884d8" label={{ value: 'Cost (NT$)', angle: -90, position: 'insideLeft' }} />
+                                        <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" label={{ value: 'Usage (kWh)', angle: 90, position: 'insideRight' }} />
+                                        <Tooltip content={<CustomTooltip />} />
+                                        <Legend />
+                                        <Area yAxisId="left" type="monotone" dataKey="cost" fill="#8884d8" stroke="#8884d8" name="Cost (NT$)" />
+                                        <Bar yAxisId="right" dataKey="usage" barSize={20} fill="#82ca9d" name="Usage (kWh)" />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
+                        ) : (
+                            <div className="h-64 flex items-center justify-center text-slate-500">
+                                <p>No electricity data available</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 

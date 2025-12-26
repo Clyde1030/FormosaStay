@@ -63,14 +63,19 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg">
-                <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+                {/* Fixed Header */}
+                <div className="flex justify-between items-center p-6 pb-4 border-b border-slate-200 flex-shrink-0">
                     <h3 className="text-xl font-bold text-slate-800">Add New Tenant</h3>
-                    <button onClick={onClose}><X className="text-slate-400 hover:text-slate-600"/></button>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+                        <X size={20} />
+                    </button>
                 </div>
                 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Scrollable Content */}
+                <div className="overflow-y-auto flex-1 px-6 py-4">
+                    <form onSubmit={handleSubmit} id="tenant-form" className="space-y-4">
                     {error && (
                         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
                             {error}
@@ -266,32 +271,35 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                             </div>
                         ))}
                     </div>
+                    </form>
+                </div>
 
-                    <div className="pt-4 flex gap-3">
-                        <button 
-                            type="submit" 
-                            disabled={isSubmitting}
-                            className="flex-1 bg-brand-600 text-white py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="animate-spin" size={16} />
-                                    Creating...
-                                </>
-                            ) : (
-                                'Save Tenant'
-                            )}
-                        </button>
-                        <button 
-                            type="button" 
-                            onClick={onClose} 
-                            disabled={isSubmitting}
-                            className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50"
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </form>
+                {/* Fixed Footer */}
+                <div className="p-6 pt-4 border-t border-slate-200 flex gap-3 flex-shrink-0 bg-white rounded-b-xl">
+                    <button 
+                        type="submit" 
+                        form="tenant-form"
+                        disabled={isSubmitting}
+                        className="flex-1 bg-brand-600 text-white py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="animate-spin" size={16} />
+                                Creating...
+                            </>
+                        ) : (
+                            'Save Tenant'
+                        )}
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={onClose} 
+                        disabled={isSubmitting}
+                        className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </div>
             </div>
         </div>
     );

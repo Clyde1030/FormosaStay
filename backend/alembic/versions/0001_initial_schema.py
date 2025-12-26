@@ -489,14 +489,14 @@ def upgrade() -> None:
         DECLARE
             elem JSONB;
         BEGIN
-            -- If assets is NULL, it's valid
-            IF NEW.assets IS NULL THEN
+            -- If assets is NULL (SQL NULL) or JSON null, it's valid
+            IF NEW.assets IS NULL OR jsonb_typeof(NEW.assets) = 'null' THEN
                 RETURN NEW;
             END IF;
             
             -- Check that assets is an array
             IF jsonb_typeof(NEW.assets) != 'array' THEN
-                RAISE EXCEPTION 'assets must be a JSON array';
+                RAISE EXCEPTION 'assets must be a JSON array or null, got: %', jsonb_typeof(NEW.assets);
             END IF;
             
             -- Validate each element in the array

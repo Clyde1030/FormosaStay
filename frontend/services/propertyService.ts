@@ -82,9 +82,28 @@ export const getTransactions = async (): Promise<Transaction[]> => {
 };
 
 export const getTransactionsByRoom = async (roomId: any): Promise<Transaction[]> => {
-    // TODO: Add /payments/?room_id= endpoint to backend
     try {
-        return [];
+        const payments = await apiClient.get<any[]>(`/rooms/${roomId}/payments`);
+        
+        return payments.map(p => ({
+            id: p.invoice_id?.toString() || '',
+            roomId: roomId,
+            tenantName: p.tenant_name || '',
+            contractId: p.lease_id,
+            type: p.category === '房租' ? 'Rent' : 
+                  p.category === '電費' ? 'Electricity' : 
+                  p.category === '罰款' ? 'Fee' : 
+                  p.category === '押金' ? 'Deposit' : 'Rent',
+            amount: Number(p.due_amount) || 0,
+            dueDate: p.due_date || '',
+            status: p.payment_status_en === 'Paid' ? 'Paid' :
+                    p.payment_status_en === 'Unpaid' ? 'Unpaid' :
+                    p.payment_status_en === 'Partial' ? 'Unpaid' : 'Unpaid',
+            paidDate: p.payment_status_en === 'Paid' ? p.due_date : undefined,
+            periodStart: p.period_start || '',
+            periodEnd: p.period_end || '',
+            description: p.period_display || ''
+        }));
     } catch (error) {
         console.error('Error fetching transactions by room:', error);
         return [];
@@ -127,38 +146,80 @@ export const getTenantById = async (tenantId: number): Promise<TenantWithContrac
 
 export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract | null> => {
     try {
-        const leases = await apiClient.get<any[]>('/leases/?room_id=' + roomId + '&status=有效');
-        const activeLease = leases.find(l => l.status === '有效');
+        // Use the new room tenant endpoint
+        const tenantData = await apiClient.get<any>(`/rooms/${roomId}/tenant`);
         
-        if (!activeLease) return null;
-
-        // Get tenant details
-        const tenant = await apiClient.get<any>(`/tenants/${activeLease.tenant_id}`);
+        // Handle null response (room is vacant)
+        if (!tenantData || tenantData === null) {
+            console.log(`Room ${roomId} is vacant (no tenant data returned)`);
+            return null;
+        }
         
+        // Check if tenant_id exists
+        if (!tenantData.tenant_id) {
+            console.log(`Room ${roomId} has no tenant_id in response:`, tenantData);
+            return null;
+        }
+        
+        // Map the view data to TenantWithContract format
         return {
-            ...tenant,
-            name: tenant.name || `${tenant.last_name}${tenant.first_name}`,
-            phoneNumber: tenant.phoneNumber || tenant.phone,
-            idNumber: tenant.idNumber || tenant.personal_id,
-            homeAddress: tenant.homeAddress || tenant.address,
-            emergency_contacts: tenant.emergency_contacts || [],
+            id: tenantData.tenant_id,
+            first_name: tenantData.first_name,
+            last_name: tenantData.last_name,
+            name: tenantData.tenant_name || `${tenantData.last_name}${tenantData.first_name}`,
+            gender: tenantData.gender,
+            personal_id: tenantData.personal_id,
+            idNumber: tenantData.personal_id,
+            phone: tenantData.phone,
+            phoneNumber: tenantData.phone,
+            email: tenantData.email,
+            line_id: tenantData.line_id,
+            lineId: tenantData.line_id,
+            address: tenantData.tenant_address,
+            homeAddress: tenantData.tenant_address,
             currentContract: {
-                ...activeLease,
-                rentAmount: Number(activeLease.monthly_rent),
-                depositAmount: Number(activeLease.deposit),
-                itemsIssued: activeLease.assets || [],
-                paymentFrequency: activeLease.payment_term as PaymentFrequency,
+                id: tenantData.lease_id,
+                tenant_id: tenantData.tenant_id,
+                room_id: tenantData.room_id,
+                rentAmount: Number(tenantData.monthly_rent) || 0,
+                depositAmount: Number(tenantData.deposit) || 0,
+                startDate: tenantData.lease_start_date,
+                endDate: tenantData.lease_end_date,
+                paymentFrequency: tenantData.payment_term as PaymentFrequency,
                 depositStatus: DepositStatus.PAID,
-                vehicle_plate: activeLease.vehicle_plate
+                itemsIssued: Array.isArray(tenantData.assets) ? tenantData.assets : [],
+                status: tenantData.lease_status,
+                vehicle_plate: tenantData.vehicle_plate,
+                pay_rent_on: tenantData.pay_rent_on
             },
             room: {
-                id: activeLease.room_id,
-                roomNumber: activeLease.room?.roomNumber || ''
+                id: tenantData.room_id,
+                roomNumber: tenantData.room_number || `${tenantData.floor_no}${tenantData.room_no}`,
+                building_id: tenantData.building_id
             }
         };
     } catch (error) {
         console.error('Error fetching tenant in room:', error);
         return null;
+    }
+};
+
+export const getRoomElectricityHistory = async (roomId: any): Promise<any[]> => {
+    try {
+        const data = await apiClient.get<any[]>(`/rooms/${roomId}/electricity`);
+        return data.map(item => ({
+            date: item.read_date,
+            usage: Number(item.usage_kwh) || 0,
+            cost: Number(item.electricity_cost || item.calculated_cost) || 0,
+            periodStart: item.period_start || '',
+            periodEnd: item.period_end || '',
+            readingStart: Number(item.previous_reading) || 0,
+            readingEnd: Number(item.current_reading) || 0,
+            rate: Number(item.rate_per_kwh) || 0
+        }));
+    } catch (error) {
+        console.error('Error fetching electricity history:', error);
+        return [];
     }
 };
 
@@ -324,10 +385,10 @@ export const createContract = async (contract: {
     pay_rent_on: number;
     payment_term: string;
     vehicle_plate?: string;
-    assets?: Array<{ asset_type: string; quantity: number }>;
+    assets?: Array<{ type: string; quantity: number }>;
 }) => {
     // Payment term is already in Chinese format, pass through directly
-    const contractData = {
+    const contractData: any = {
         tenant_id: contract.tenant_id,
         room_id: contract.room_id,
         start_date: contract.start_date,
@@ -336,9 +397,17 @@ export const createContract = async (contract: {
         deposit: contract.deposit,
         pay_rent_on: contract.pay_rent_on,
         payment_term: contract.payment_term, // Already in Chinese: '月繳', '季繳', '半年繳', '年繳'
-        vehicle_plate: contract.vehicle_plate || undefined,
-        assets: contract.assets || []
     };
+    
+    // Only include optional fields if they have values
+    if (contract.vehicle_plate) {
+        contractData.vehicle_plate = contract.vehicle_plate;
+    }
+    
+    // Only include assets if provided and not empty
+    if (contract.assets && contract.assets.length > 0) {
+        contractData.assets = contract.assets;
+    }
     
     const data = await apiClient.post<any>('/leases/', contractData);
     return data;
