@@ -3,7 +3,7 @@ import {
     Building, Room, Tenant, Lease, LeaseStatus, 
     TenantWithLease, Payment, CashFlow, 
     ElectricityRate, MeterReading, Transaction, Expense,
-    TenantWithContract, Contract
+    TenantWithContract, Contract, PaymentFrequency, DepositStatus
 } from '../types';
 
 // --- Data Fetching ---

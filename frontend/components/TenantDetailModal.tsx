@@ -508,11 +508,21 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             <div className="col-span-2">
                                                 <label className="text-xs text-slate-400">Items Issued</label>
                                                 <div className="flex gap-2 mt-1">
-                                                    {tenant.currentContract.itemsIssued.map((item, i) => (
-                                                        <span key={i} className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs border border-slate-200 flex items-center gap-1">
-                                                            <Key size={10}/> {item}
-                                                        </span>
-                                                    ))}
+                                                    {tenant.currentContract.itemsIssued && Array.isArray(tenant.currentContract.itemsIssued) ? (
+                                                        tenant.currentContract.itemsIssued.map((item, i) => {
+                                                            // Handle both object format {type, quantity} and string format
+                                                            const itemText = typeof item === 'object' && item !== null && 'type' in item
+                                                                ? `${item.type} x${item.quantity || 1}`
+                                                                : String(item);
+                                                            return (
+                                                                <span key={i} className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs border border-slate-200 flex items-center gap-1">
+                                                                    <Key size={10}/> {itemText}
+                                                                </span>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400 italic">No items issued</span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
