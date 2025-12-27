@@ -1,0 +1,72 @@
+-- ============================================================
+-- View 2: Room Payment History
+-- ============================================================
+-- Shows all payment/invoice records for a room, including:
+-- - Rent payments
+-- - Electricity bills
+-- - Penalties/fees
+-- - Deposit transactions
+-- Usage: Get payment history for a room:
+-- SELECT * FROM v_room_payment_history WHERE room_id = 17;
+CREATE OR REPLACE VIEW v_room_payment_history AS
+SELECT 
+    r.id AS room_id,
+    CONCAT(r.floor_no, r.room_no) AS room_number,
+    
+    -- Invoice/Payment Information
+    inv.id AS invoice_id,
+    inv.category,
+    inv.period_start,
+    inv.period_end,
+    inv.due_date,
+    inv.due_amount,
+    inv.paid_amount,
+    inv.status AS payment_status,
+    inv.created_at AS invoice_created_at,
+    
+    -- Lease Information
+    l.id AS lease_id,
+    l.start_date AS lease_start_date,
+    l.end_date AS lease_end_date,
+    
+    -- Tenant Information (primary tenant)
+    t.id AS tenant_id,
+    CONCAT(t.last_name, t.first_name) AS tenant_name,
+    
+    -- Payment Status Details (cast to TEXT to avoid enum conflict)
+    CASE 
+        WHEN inv.status = '已交' THEN 'Paid'::TEXT
+        WHEN inv.status = '未交' THEN 'Unpaid'::TEXT
+        WHEN inv.status = '部分未交' THEN 'Partial'::TEXT
+        WHEN inv.status = '呆帳' THEN 'Bad Debt'::TEXT
+        WHEN inv.status = '歸還' THEN 'Returned'::TEXT
+        WHEN inv.status = '取消' THEN 'Canceled'::TEXT
+        ELSE inv.status::TEXT
+    END AS payment_status_en,
+    
+    -- Calculate outstanding amount
+    (inv.due_amount - inv.paid_amount) AS outstanding_amount,
+    
+    -- Period display (cast to TEXT to avoid enum conflict)
+    CASE 
+        WHEN inv.category = '房租' THEN 
+            (TO_CHAR(inv.period_start, 'YYYY-MM') || ' Rent')::TEXT
+        WHEN inv.category = '電費' THEN 
+            (TO_CHAR(inv.period_start, 'YYYY-MM') || ' Electricity')::TEXT
+        WHEN inv.category = '罰款' THEN 
+            ('Penalty: ' || TO_CHAR(inv.due_date, 'YYYY-MM-DD'))::TEXT
+        WHEN inv.category = '押金' THEN 
+            'Deposit'::TEXT
+        ELSE inv.category::TEXT
+    END AS period_display
+
+FROM room r
+INNER JOIN lease l ON l.room_id = r.id
+LEFT JOIN invoice inv ON inv.lease_id = l.id 
+    AND inv.deleted_at IS NULL
+LEFT JOIN lease_tenant lt ON lt.lease_id = l.id 
+    AND lt.tenant_role = '主要'  -- Primary tenant only
+LEFT JOIN tenant t ON t.id = lt.tenant_id
+WHERE r.deleted_at IS NULL
+    AND l.deleted_at IS NULL
+ORDER BY r.id, inv.due_date DESC, inv.created_at DESC;

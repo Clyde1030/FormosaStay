@@ -17,4 +17,3 @@ SELECT
     END AS status
 FROM lease l
 WHERE l.deleted_at IS NULL;
-

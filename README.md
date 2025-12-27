@@ -6,7 +6,7 @@ Target Scale: 4 Buildings | ~60 Rooms.
 
 Primary Goal: Centralize tenant data, automate electricity billing, and provide a real-time Profit & Loss (P&L) overview.
 
-Tech Stack: React (Frontend), Supabase (Backend/Database/Auth), with a roadmap for AWS migration (RDS, S3, Cognito).
+Tech Stack: React (Frontend), Dockerized Postgres Database(Backend/Database/Auth), with a roadmap for AWS migration (RDS, S3, Cognito).
 
 ## 🚀 Core Functional Modules
 1. Dashboard & Business Overview
@@ -40,13 +40,13 @@ The system uses a relational structure optimized for Taiwan’s rental laws. Key
 - payment: Transaction records for rent and utilities.
 - cash_flow: Comprehensive ledger for property expenses and income.
 
-### Current Implementation (Supabase)
+### Current Implementation (Postgres)
 - Project URL: https://huodcetrwapdedipjehg.supabase.co
 - Auth: Managed via Supabase Auth for roles (Admin, Manager, Engineer).
 - Storage: Initial receipt storage via Supabase buckets.
 
 ### AWS Roadmap
-- Compute: Deploy frontend on AWS Amplify/S3 + CloudFront.
+- Compute: Deploy frontend on AWS EC2/S3 + CloudFront.
 - Database: Migrate to Amazon RDS (Postgres) for enterprise scaling.
 - Auth: Transition to AWS Cognito for advanced IAM.
 - Automation: AWS Lambda for monthly bill generation and Line Notify alerts.
@@ -54,7 +54,6 @@ The system uses a relational structure optimized for Taiwan’s rental laws. Key
 ### 🇹🇼 Taiwan Market Localization
 - Measurement: Units tracked in Ping (坪).
 - Identification: Validation for Taiwan ID and ARC numbers.
-- Line Pay: Integrated payment interface for mobile-first tenants.
 - Electricity: Support for summer/non-summer rate fluctuations and independent suite meters.
 
 ## 🛠️ Getting Started
@@ -64,8 +63,9 @@ Execute the SQL schema found in /database/schema.sql within your Supabase SQL Ed
 2. Environment Variables
 Create a .env file in the root directory:
 ```bash
-VITE_SUPABASE_URL=https://huodcetrwapdedipjehg.supabase.co
-VITE_SUPABASE_ANON_KEY=your_publishable_key
+DATABASE_URL=postgresql://username:password@localhost:5432/database_name
+DEBUG=true
+DATABASE_SSL_MODE=disable
 ```
 
 3. Installation
@@ -75,7 +75,8 @@ npm run dev
 ```
 
 ## 📈 Future Enhancements
-- Line Notify Integration: Auto-send rent reminders and electricity bills to tenants.
 - Automated PDF Generation: One-click official Taiwan rental contract generation.
 - Smart Meter Integration: API hooks for IoT electric meters to eliminate manual entry.
 - Repair Ticketing: Tenant-facing interface to report maintenance issues with photo uploads.
+- Line Pay: Integrated payment interface for mobile-first tenants.
+- Line Notify Integration: Auto-send rent reminders and electricity bills to tenants.
