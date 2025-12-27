@@ -50,11 +50,12 @@ export const fetchTenantsWithDetails = async (): Promise<TenantWithLease[]> => {
         return {
             ...t,
             active_lease: t.active_lease,
-            room: t.active_lease?.room ? {
-                ...t.active_lease.room,
-                roomNumber: t.active_lease.room.roomNumber || `${t.active_lease.room.floor_no}${t.active_lease.room.room_no}`
+            room: t.room || t.active_lease?.room ? {
+                ...(t.room || t.active_lease.room),
+                roomNumber: (t.room || t.active_lease?.room)?.roomNumber || 
+                           `${(t.room || t.active_lease?.room)?.floor_no}${(t.room || t.active_lease?.room)?.room_no}`
             } : undefined,
-            building: t.active_lease?.room?.building
+            building: t.building || t.active_lease?.room?.building
         };
     });
 };

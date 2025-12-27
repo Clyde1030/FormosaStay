@@ -130,12 +130,15 @@ const TenantList: React.FC = () => {
                                         <div className="text-xs text-slate-400">{t.personal_id}</div>
                                     </td>
                                     <td className="p-4">
-                                        {t.room ? (
-                                            <>
-                                                <div className="text-sm font-medium">Room {t.room.room_no}</div>
-                                                <div className="text-xs text-slate-500">Building {t.building?.building_no}</div>
-                                            </>
-                                        ) : <span className="text-slate-400 italic text-sm">Vacant</span>}
+                                        {t.room && t.building ? (
+                                            <div className="text-sm font-medium">
+                                                {t.building.building_no}號{t.room.floor_no}{t.room.room_no}
+                                            </div>
+                                        ) : t.room ? (
+                                            <div className="text-sm font-medium">{t.room.roomNumber || `${t.room.floor_no}${t.room.room_no}`}</div>
+                                        ) : (
+                                            <span className="text-slate-400 italic text-sm">Vacant</span>
+                                        )}
                                     </td>
                                     <td className="p-4">
                                         {t.active_lease ? (

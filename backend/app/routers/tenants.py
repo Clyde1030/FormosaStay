@@ -81,7 +81,21 @@ async def list_tenants(
                         "room_no": tenant_dict['room_no'],
                         "roomNumber": tenant_dict['room_number'],
                     } if tenant_dict['room_id'] else None,
+                    "building": {
+                        "id": tenant_dict['building_id'],
+                        "building_no": tenant_dict['building_no'],
+                    } if tenant_dict['building_id'] else None,
                 } if tenant_dict['lease_id'] else None,
+                "room": {
+                    "id": tenant_dict['room_id'],
+                    "floor_no": tenant_dict['floor_no'],
+                    "room_no": tenant_dict['room_no'],
+                    "roomNumber": tenant_dict['room_number'],
+                } if tenant_dict['room_id'] else None,
+                "building": {
+                    "id": tenant_dict['building_id'],
+                    "building_no": tenant_dict['building_no'],
+                } if tenant_dict['building_id'] else None,
             })
         
         return tenants
@@ -163,6 +177,17 @@ async def get_tenant(tenant_id: int, db: AsyncSession = Depends(get_db)):
                     "building_id": tenant_dict['building_id'],
                 } if tenant_dict['room_id'] else None,
             } if tenant_dict['lease_id'] else None,
+            "room": {
+                "id": tenant_dict['room_id'],
+                "floor_no": tenant_dict['floor_no'],
+                "room_no": tenant_dict['room_no'],
+                "roomNumber": tenant_dict['room_number'],
+                "building_id": tenant_dict['building_id'],
+            } if tenant_dict['room_id'] else None,
+            "building": {
+                "id": tenant_dict['building_id'],
+                "building_no": tenant_dict['building_no'],
+            } if tenant_dict['building_id'] else None,
         }
     except HTTPException:
         raise
