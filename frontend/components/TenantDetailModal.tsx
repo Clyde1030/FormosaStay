@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import { TenantWithContract, ContractStatus, PaymentFrequency, DepositStatus, Contract, EmergencyContact } from '../types';
 import { calculateProration, terminateContract, renewContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate } from '../services/propertyService';
+import { generateContractPDF } from '../services/contractPdfService';
 import NewContractModal from './NewContractModal';
 
 interface Props {
@@ -159,8 +160,17 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
         }
     };
 
-    const handlePrint = () => {
-        alert("Generating PDF Contract... (Feature stub)");
+    const handlePrint = async () => {
+        if (!tenant.currentContract) {
+            alert('無法生成合約：沒有有效的合約資訊');
+            return;
+        }
+        try {
+            await generateContractPDF(tenant);
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('生成PDF時發生錯誤，請稍後再試');
+        }
     };
 
     // Renewal Form State

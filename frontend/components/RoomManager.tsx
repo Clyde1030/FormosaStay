@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getBuildings, getRooms, getTenantInRoom, getTransactionsByRoom, getRoomElectricityHistory } from '../services/propertyService';
+import { getBuildings, getRooms, getTenantInRoom, getTransactionsByRoom, getRoomElectricityHistory, getRoomTenants } from '../services/propertyService';
 import { Room, Building, TenantWithContract, Transaction } from '../types';
 import { User, Zap, DollarSign, X, ArrowRight, MapPin, Maximize, FilePlus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Area, Legend } from 'recharts';
@@ -78,6 +78,7 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
     const [building, setBuilding] = useState<Building | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [electricityData, setElectricityData] = useState<any[]>([]);
+    const [roomTenants, setRoomTenants] = useState<any[]>([]);
     const [isTenantModalOpen, setIsTenantModalOpen] = useState(false);
     const [isContractModalOpen, setIsContractModalOpen] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -86,18 +87,20 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
         const loadData = async () => {
             setLoading(true);
             try {
-                const [t, rs, txs, elec, bs] = await Promise.all([
+                const [t, rs, txs, elec, bs, tenants] = await Promise.all([
                     getTenantInRoom(roomId),
                     getRooms(),
                     getTransactionsByRoom(roomId),
                     getRoomElectricityHistory(roomId),
-                    getBuildings()
+                    getBuildings(),
+                    getRoomTenants(roomId)
                 ]);
                 const r = rs.find(item => item.id === roomId) || null;
                 setTenant(t);
                 setRoom(r);
                 setTransactions(txs);
                 setElectricityData(elec);
+                setRoomTenants(tenants);
                 if (r) {
                     setBuilding(bs.find(b => b.id === r.building_id) || null);
                 }
@@ -174,9 +177,11 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
             <div className="w-full max-w-4xl bg-white h-full shadow-2xl animate-slide-in-right overflow-y-auto">
                 <div className="p-6 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white z-10">
                     <div>
-                        <h2 className="text-2xl font-bold text-slate-800">Room {room?.roomNumber} Dashboard</h2>
+                        <h2 className="text-2xl font-bold text-slate-800">
+                            {building?.building_no}號{room?.roomNumber} Dashboard
+                        </h2>
                         <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
-                            <span className="flex items-center gap-1"><MapPin size={14}/> {building?.address}</span>
+                            <span className="flex items-center gap-1"><MapPin size={14}/> {building?.address}{room?.roomNumber}</span>
                             <span className="flex items-center gap-1"><Maximize size={14}/> {room?.sizePing} Ping</span>
                         </div>
                     </div>
@@ -191,8 +196,169 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                 </div>
 
                 <div className="p-6 space-y-8">
-                    {/* Tenant Info Card */}
-                    {tenant ? (
+                    {/* Tenant Basic Information Card */}
+                    {roomTenants.length > 0 ? (
+                        <div className="bg-brand-50 border border-brand-100 rounded-xl p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="bg-brand-100 p-3 rounded-full text-brand-600">
+                                    <User size={24} />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-800">Tenant Basic Information</h3>
+                            </div>
+                            
+                            {(() => {
+                                const primaryTenant = roomTenants.find(tt => tt.tenant_role === '主要');
+                                const coTenants = roomTenants.filter(tt => tt.tenant_role !== '主要');
+                                const leaseInfo = primaryTenant || roomTenants[0]; // Use primary tenant's lease info
+                                
+                                return (
+                                    <div className="space-y-6">
+                                        {/* Lease Information (shared by all tenants) */}
+                                        <div>
+                                            <h4 className="text-sm font-bold text-slate-700 mb-3">Lease Information</h4>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                <div>
+                                                    <label className="text-xs text-brand-600 font-bold uppercase">Lease Start Date</label>
+                                                    <p className="font-medium text-slate-800">{leaseInfo?.lease_start_date || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-brand-600 font-bold uppercase">Lease End Date</label>
+                                                    <p className="font-medium text-slate-800">{leaseInfo?.lease_end_date || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-brand-600 font-bold uppercase">Rent (Monthly)</label>
+                                                    <p className="font-medium text-slate-800">NT$ {Number(leaseInfo?.monthly_rent || 0).toLocaleString()}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-brand-600 font-bold uppercase">Pay Rent On</label>
+                                                    <p className="font-medium text-slate-800">Day {leaseInfo?.pay_rent_on || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-brand-600 font-bold uppercase">Payment Term</label>
+                                                    <p className="font-medium text-slate-800">{leaseInfo?.payment_term || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-brand-600 font-bold uppercase">Lease Status</label>
+                                                    <p className="font-medium text-slate-800">{leaseInfo?.lease_status || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-brand-600 font-bold uppercase">Vehicle Plate</label>
+                                                    <p className="font-medium text-slate-800">{leaseInfo?.vehicle_plate || 'N/A'}</p>
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="text-xs text-brand-600 font-bold uppercase">Assets</label>
+                                                    <div className="flex flex-wrap gap-2 mt-1">
+                                                        {Array.isArray(leaseInfo?.assets) && leaseInfo.assets.length > 0 ? (
+                                                            leaseInfo.assets.map((asset: any, idx: number) => {
+                                                                const assetText = typeof asset === 'object' && asset !== null && 'type' in asset
+                                                                    ? `${asset.type} x${asset.quantity || 1}`
+                                                                    : String(asset);
+                                                                return (
+                                                                    <span key={idx} className="bg-white px-2 py-1 rounded text-xs border border-brand-200">
+                                                                        {assetText}
+                                                                    </span>
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            <span className="text-slate-500 text-sm">N/A</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Primary Tenant */}
+                                        {primaryTenant && (
+                                            <div className="pt-4 border-t border-brand-200">
+                                                <h4 className="text-sm font-bold text-slate-700 mb-3">
+                                                    Primary Tenant
+                                                    <span 
+                                                        className="ml-2 text-brand-600 cursor-pointer hover:underline text-xs font-normal"
+                                                        onClick={() => setIsTenantModalOpen(true)}
+                                                    >
+                                                        (View Details)
+                                                    </span>
+                                                </h4>
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                    <div>
+                                                        <label className="text-xs text-brand-600 font-bold uppercase">Name</label>
+                                                        <p className="font-medium text-slate-800">{primaryTenant.last_name || ''}{primaryTenant.first_name || ''}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-brand-600 font-bold uppercase">Gender</label>
+                                                        <p className="font-medium text-slate-800">{primaryTenant.gender || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-brand-600 font-bold uppercase">Personal ID</label>
+                                                        <p className="font-medium text-slate-800">{primaryTenant.personal_id || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-brand-600 font-bold uppercase">Phone</label>
+                                                        <p className="font-medium text-slate-800">{primaryTenant.phone || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-brand-600 font-bold uppercase">Email</label>
+                                                        <p className="font-medium text-slate-800">{primaryTenant.email || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-xs text-brand-600 font-bold uppercase">Line ID</label>
+                                                        <p className="font-medium text-slate-800">{primaryTenant.line_id || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="md:col-span-3">
+                                                        <label className="text-xs text-brand-600 font-bold uppercase">Home Address</label>
+                                                        <p className="font-medium text-slate-800 text-sm">{primaryTenant.tenant_address || 'N/A'}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Co-Tenants */}
+                                        {coTenants.length > 0 && (
+                                            <div className="pt-4 border-t border-brand-200">
+                                                <h4 className="text-sm font-bold text-slate-700 mb-3">Co-Tenants</h4>
+                                                <div className="space-y-4">
+                                                    {coTenants.map((coTenant, idx) => (
+                                                        <div key={idx} className="bg-white p-4 rounded-lg border border-brand-200">
+                                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                                <div>
+                                                                    <label className="text-xs text-brand-600 font-bold uppercase">Name</label>
+                                                                    <p className="font-medium text-slate-800">{coTenant.last_name || ''}{coTenant.first_name || ''}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-xs text-brand-600 font-bold uppercase">Gender</label>
+                                                                    <p className="font-medium text-slate-800">{coTenant.gender || 'N/A'}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-xs text-brand-600 font-bold uppercase">Personal ID</label>
+                                                                    <p className="font-medium text-slate-800">{coTenant.personal_id || 'N/A'}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-xs text-brand-600 font-bold uppercase">Phone</label>
+                                                                    <p className="font-medium text-slate-800">{coTenant.phone || 'N/A'}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-xs text-brand-600 font-bold uppercase">Email</label>
+                                                                    <p className="font-medium text-slate-800">{coTenant.email || 'N/A'}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-xs text-brand-600 font-bold uppercase">Line ID</label>
+                                                                    <p className="font-medium text-slate-800">{coTenant.line_id || 'N/A'}</p>
+                                                                </div>
+                                                                <div className="md:col-span-3">
+                                                                    <label className="text-xs text-brand-600 font-bold uppercase">Home Address</label>
+                                                                    <p className="font-medium text-slate-800 text-sm">{coTenant.tenant_address || 'N/A'}</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    ) : tenant ? (
                         <div className="bg-brand-50 border border-brand-100 rounded-xl p-6 flex items-start gap-4">
                             <div className="bg-brand-100 p-3 rounded-full text-brand-600">
                                 <User size={24} />

@@ -269,10 +269,10 @@ async def update_tenant(
         except:
             pass
     
-    # Get active lease through lease_tenants relationship
+    # Get active lease through lease_tenants relationship (use computed status)
     active_lease = None
     for lt in updated_tenant.lease_tenants:
-        if lt.lease.status == "有效" and (lt.lease.deleted_at is None):
+        if lt.lease.get_status() == "有效" and (lt.lease.deleted_at is None):
             active_lease = lt.lease
             # Load room relationship
             await db.refresh(lt.lease, ["room"])

@@ -197,6 +197,19 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
     }
 };
 
+export const getRoomTenants = async (roomId: any): Promise<any[]> => {
+    try {
+        const data = await apiClient.get<any[]>(`/rooms/${roomId}/tenants`);
+        return data.map(item => ({
+            ...item,
+            assets: Array.isArray(item.assets) ? item.assets : (item.assets ? JSON.parse(item.assets) : [])
+        }));
+    } catch (error) {
+        console.error('Error fetching room tenants:', error);
+        return [];
+    }
+};
+
 export const getRoomElectricityHistory = async (roomId: any): Promise<any[]> => {
     try {
         const data = await apiClient.get<any[]>(`/rooms/${roomId}/electricity`);

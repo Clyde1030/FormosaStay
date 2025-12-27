@@ -1,8 +1,9 @@
 # app/services/lease_service.py
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.orm import selectinload
 from typing import Optional
+from datetime import date
 
 from app.models.lease import Lease, LeaseTenant
 from app.models.room import Room
@@ -80,13 +81,14 @@ class LeaseService:
         tenant_name = f"{tenant.first_name} {tenant.last_name}"
         tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
 
-        # Check if room already has an active lease
+        # Check if room already has an active lease (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
         existing_lease_result = await db.execute(
             select(Lease)
             .where(
                 and_(
                     Lease.room_id == lease_data.room_id,
-                    Lease.status == "有效",
+                    Lease.early_termination_date.is_(None),
+                    Lease.end_date >= func.current_date(),
                     Lease.deleted_at.is_(None)
                 )
             )
@@ -129,7 +131,7 @@ class LeaseService:
                 for asset in lease_data.assets
             ]
 
-        # Create new lease
+        # Create new lease (status is now computed, no need to set it)
         new_lease = Lease(
             room_id=lease_data.room_id,
             start_date=lease_data.start_date,
@@ -139,7 +141,6 @@ class LeaseService:
             pay_rent_on=lease_data.pay_rent_on,
             payment_term=lease_data.payment_term,
             vehicle_plate=lease_data.vehicle_plate,
-            status="有效",
             assets=assets_jsonb,
             created_by=created_by,
         )
@@ -203,10 +204,12 @@ class LeaseService:
         else:
             tenant_info = f"Lease ID: {lease_id}"
 
-        if lease.status != "有效":
+        # Check if lease is active (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
+        if lease.early_termination_date is not None or lease.end_date < date.today():
+            current_status = lease.get_status()
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot renew lease with status '{lease.status}'. Only active leases can be renewed. {tenant_info}"
+                detail=f"Cannot renew lease with status '{current_status}'. Only active leases can be renewed. {tenant_info}"
             )
 
         # Validate new end date
@@ -276,10 +279,12 @@ class LeaseService:
         else:
             tenant_info = f"Lease ID: {lease_id}"
 
-        if lease.status != "有效":
+        # Check if lease is active (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
+        if lease.early_termination_date is not None or lease.end_date < date.today():
+            current_status = lease.get_status()
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot terminate lease with status '{lease.status}'. Only active leases can be terminated. {tenant_info}"
+                detail=f"Cannot terminate lease with status '{current_status}'. Only active leases can be terminated. {tenant_info}"
             )
 
         # Validate termination date
@@ -337,8 +342,7 @@ class LeaseService:
                     detail=f"Error calculating electricity bill: {str(e)}. {tenant_info}"
                 ) from e
 
-        # Update lease status
-        lease.status = "終止"
+        # Update lease: set early_termination_date (status will be calculated as "終止")
         lease.early_termination_date = terminate_data.termination_date
         lease.updated_by = updated_by
 
@@ -383,14 +387,20 @@ class LeaseService:
             query = query.join(LeaseTenant).where(LeaseTenant.tenant_id == tenant_id)
         if room_id:
             conditions.append(Lease.room_id == room_id)
-        if status:
-            conditions.append(Lease.status == status)
+        # Note: status filtering is done in Python after fetching since status is computed
 
         if conditions:
             query = query.where(and_(*conditions))
 
-        query = query.offset(skip).limit(limit).order_by(Lease.created_at.desc())
+        query = query.order_by(Lease.created_at.desc())
 
         result = await db.execute(query)
-        return list(result.scalars().all())
+        leases = list(result.scalars().all())
+        
+        # Filter by status if provided (status is computed, so filter in Python)
+        if status:
+            leases = [l for l in leases if l.get_status() == status]
+        
+        # Apply pagination after status filtering
+        return leases[skip:skip + limit]
 

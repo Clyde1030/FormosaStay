@@ -1,7 +1,7 @@
 # app/routers/rooms.py
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, text
+from sqlalchemy import select, and_, text, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
@@ -29,9 +29,15 @@ async def list_rooms(
     result = await db.execute(query)
     rooms = result.scalars().all()
     
-    # Get active leases to determine room status
+    # Get active leases to determine room status (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
     leases_result = await db.execute(
-        select(Lease).where(Lease.status == "有效")
+        select(Lease).where(
+            and_(
+                Lease.early_termination_date.is_(None),
+                Lease.end_date >= func.current_date(),
+                Lease.deleted_at.is_(None)
+            )
+        )
     )
     active_leases = {lease.room_id: lease for lease in leases_result.scalars().all()}
     
@@ -74,12 +80,14 @@ async def get_room(room_id: int, db: AsyncSession = Depends(get_db)):
             detail=f"Room with id {room_id} not found"
         )
     
-    # Check if room has active lease
+    # Check if room has active lease (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
     lease_result = await db.execute(
         select(Lease).where(
             and_(
                 Lease.room_id == room_id,
-                Lease.status == "有效"
+                Lease.early_termination_date.is_(None),
+                Lease.end_date >= func.current_date(),
+                Lease.deleted_at.is_(None)
             )
         )
     )
@@ -167,6 +175,47 @@ async def get_room_tenant(room_id: int, db: AsyncSession = Depends(get_db)):
                 data['assets'] = json.loads(data['assets'])
         
         return data
+    except Exception as e:
+        if "does not exist" in str(e) or "relation" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="SQL views not found. Please run backend/app/db/views/room_dashboard_views.sql to create the views."
+            )
+        raise
+
+
+@router.get("/{room_id}/tenants")
+async def get_room_tenants(room_id: int, db: AsyncSession = Depends(get_db)):
+    """Get all current tenants for a room (primary and co-tenants)"""
+    try:
+        result = await db.execute(
+            text("""
+                SELECT * FROM v_room_current_tenant 
+                WHERE room_id = :room_id
+                ORDER BY tenant_role DESC, tenant_id
+            """),
+            {"room_id": room_id}
+        )
+        rows = result.all()
+        
+        if not rows:
+            return []
+        
+        tenants = []
+        for row in rows:
+            tenant_id = row._mapping.get('tenant_id')
+            if tenant_id:
+                data = _serialize_row(row)
+                
+                # Format assets if present
+                if data.get('assets'):
+                    import json
+                    if isinstance(data['assets'], str):
+                        data['assets'] = json.loads(data['assets'])
+                
+                tenants.append(data)
+        
+        return tenants
     except Exception as e:
         if "does not exist" in str(e) or "relation" in str(e).lower():
             raise HTTPException(

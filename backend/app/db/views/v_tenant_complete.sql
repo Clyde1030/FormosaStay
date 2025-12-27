@@ -54,7 +54,12 @@ SELECT
     l.deposit,
     l.pay_rent_on,
     l.payment_term,
-    l.status AS lease_status,
+    -- Calculate lease status: IF early_termination_date IS NOT NULL → 終止, ELSE IF end_date < CURRENT_DATE → 到期, ELSE → 有效
+    CASE 
+        WHEN l.early_termination_date IS NOT NULL THEN '終止'
+        WHEN l.end_date < CURRENT_DATE THEN '到期'
+        ELSE '有效'
+    END AS lease_status,
     l.vehicle_plate,
     l.assets AS lease_assets,  -- JSONB array of assets: [{"type": "鑰匙", "quantity": 1}, ...]
     
@@ -110,9 +115,10 @@ FROM tenant t
 LEFT JOIN lease_tenant lt ON lt.tenant_id = t.id
     AND lt.tenant_role = '主要'  -- Primary tenant only
 LEFT JOIN lease l ON l.id = lt.lease_id
-    AND l.status = '有效'  -- Active lease only
+    -- Active lease only: no early_termination_date and end_date >= CURRENT_DATE
+    AND l.early_termination_date IS NULL
+    AND l.end_date >= CURRENT_DATE
     AND l.deleted_at IS NULL
-    AND (l.early_termination_date IS NULL OR l.early_termination_date > CURRENT_DATE)
 LEFT JOIN room r ON r.id = l.room_id
     AND r.deleted_at IS NULL
 LEFT JOIN building b ON b.id = r.building_id
