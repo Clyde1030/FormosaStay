@@ -7,7 +7,8 @@ import {
     addTransaction, updateTransaction, deleteTransaction, 
     addExpense, updateExpense, deleteExpense,
     recordMeterReading, getElectricityRates, addElectricityRate, deleteElectricityRate, getCurrentElectricityRate,
-    getTransactionsByRoom, getCashFlowCategories
+    getTransactionsByRoom, getCashFlowCategories,
+    calculateRentAmount, calculatePeriodEnd, formatRentNote
 } from '../services/propertyService';
 import { Transaction, Expense, Room, Building, Tenant, ElectricityRate, CashFlowCategory } from '../types';
 
@@ -538,6 +539,7 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
     const [paymentTermMonths, setPaymentTermMonths] = useState(1);
     const [discount, setDiscount] = useState(0);
     const [periodStart, setPeriodStart] = useState(new Date().toISOString().split('T')[0]);
+    const [periodEnd, setPeriodEnd] = useState<string>('');
     
     useEffect(() => {
         const loadBuildings = async () => {
@@ -562,31 +564,97 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
     useEffect(() => {
         const fetchBaseRent = async () => {
             if(roomId && type === 'Rent') {
-                const tenant = await getTenantInRoom(roomId);
-                if(tenant && tenant.currentContract) {
-                     const monthlyRent = tenant.currentContract.rentAmount;
-                     const calculated = (monthlyRent * paymentTermMonths) - discount;
-                     setAmount(calculated.toString());
+                try {
+                    const tenant = await getTenantInRoom(roomId);
+                    if(tenant && tenant.currentContract) {
+                        const monthlyRent = tenant.currentContract.rentAmount;
+                        // Use backend calculation
+                        const result = await calculateRentAmount({
+                            monthly_rent: monthlyRent,
+                            payment_term_months: paymentTermMonths,
+                            discount: discount
+                        });
+                        setAmount(result.total_amount.toString());
+                    }
+                } catch (error) {
+                    console.error('Error calculating rent:', error);
+                    // Fallback to local calculation if backend fails
+                    const tenant = await getTenantInRoom(roomId);
+                    if(tenant && tenant.currentContract) {
+                        const monthlyRent = tenant.currentContract.rentAmount;
+                        const calculated = (monthlyRent * paymentTermMonths) - discount;
+                        setAmount(calculated.toString());
+                    }
                 }
             }
         };
         fetchBaseRent();
     }, [roomId, paymentTermMonths, discount, type]);
 
-    const getPeriodEnd = (start: string, months: number) => {
-        const d = new Date(start);
-        d.setMonth(d.getMonth() + months);
-        d.setDate(d.getDate() - 1);
-        return d.toISOString().split('T')[0];
-    };
+    // Calculate period end using backend when period start or payment term changes
+    useEffect(() => {
+        const calculateEnd = async () => {
+            if (type === 'Rent' && periodStart && paymentTermMonths > 0) {
+                try {
+                    const result = await calculatePeriodEnd({
+                        period_start: periodStart,
+                        payment_term_months: paymentTermMonths
+                    });
+                    setPeriodEnd(result.period_end);
+                } catch (error) {
+                    console.error('Error calculating period end:', error);
+                    // Fallback to local calculation if backend fails
+                    const d = new Date(periodStart);
+                    d.setMonth(d.getMonth() + paymentTermMonths);
+                    d.setDate(d.getDate() - 1);
+                    setPeriodEnd(d.toISOString().split('T')[0]);
+                }
+            } else {
+                setPeriodEnd('');
+            }
+        };
+        calculateEnd();
+    }, [periodStart, paymentTermMonths, type]);
 
     const handleSubmit = async () => {
         const tenant = await getTenantInRoom(roomId);
         const tenantName = tenant?.name || 'Unknown';
         const contractId = tenant?.currentContract?.id;
 
-        const periodEnd = type === 'Rent' ? getPeriodEnd(periodStart, paymentTermMonths) : undefined;
-        const finalNote = type === 'Rent' && discount > 0 ? `${note} (Includes NT$${discount} discount)`.trim() : note;
+        // Use backend to calculate period end and format note
+        let finalPeriodEnd: string | undefined = undefined;
+        let finalNote: string = note;
+
+        if (type === 'Rent') {
+            // Calculate period end using backend
+            try {
+                const periodEndResult = await calculatePeriodEnd({
+                    period_start: periodStart,
+                    payment_term_months: paymentTermMonths
+                });
+                finalPeriodEnd = periodEndResult.period_end;
+            } catch (error) {
+                console.error('Error calculating period end:', error);
+                // Fallback to local calculation
+                const d = new Date(periodStart);
+                d.setMonth(d.getMonth() + paymentTermMonths);
+                d.setDate(d.getDate() - 1);
+                finalPeriodEnd = d.toISOString().split('T')[0];
+            }
+
+            // Format note using backend
+            try {
+                const noteResult = await formatRentNote({
+                    base_note: note,
+                    discount: discount
+                });
+                finalNote = noteResult.formatted_note;
+            } catch (error) {
+                console.error('Error formatting rent note:', error);
+                // Fallback to local formatting
+                finalNote = discount > 0 ? `${note} (Includes NT$${discount} discount)`.trim() : note;
+            }
+        }
 
         await addTransaction({
             roomId: roomId,
@@ -600,7 +668,7 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
             method: method as any,
             note: finalNote,
             periodStart: type === 'Rent' ? periodStart : undefined,
-            periodEnd: periodEnd
+            periodEnd: finalPeriodEnd
         });
         onClose();
     };
@@ -673,7 +741,7 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
                                 <div>
                                     <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Period End</label>
                                     <div className="w-full bg-slate-100 p-2 rounded text-sm text-slate-600 border border-slate-200">
-                                        {getPeriodEnd(periodStart, paymentTermMonths)}
+                                        {periodEnd || 'Calculating...'}
                                     </div>
                                 </div>
                             </div>

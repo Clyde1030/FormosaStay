@@ -366,6 +366,78 @@ export const calculateProration = (rent: number, terminationDate: string, endDat
     return Math.round((daysUsed / daysInMonth) * rent);
 };
 
+// --- Rent Calculation (Backend) ---
+
+export interface RentCalculationRequest {
+    monthly_rent: number;
+    payment_term_months: number;
+    discount: number;
+}
+
+export interface RentCalculationResponse {
+    total_amount: number;
+    base_amount: number;
+    discount: number;
+}
+
+export interface PeriodEndCalculationRequest {
+    period_start: string; // YYYY-MM-DD
+    payment_term_months: number;
+}
+
+export interface PeriodEndCalculationResponse {
+    period_end: string; // YYYY-MM-DD
+}
+
+export interface RentNoteRequest {
+    base_note?: string;
+    discount: number;
+}
+
+export interface RentNoteResponse {
+    formatted_note: string;
+}
+
+export const calculateRentAmount = async (request: RentCalculationRequest): Promise<RentCalculationResponse> => {
+    try {
+        const response = await apiClient.post<RentCalculationResponse>('/payments/calculate-rent', {
+            monthly_rent: request.monthly_rent,
+            payment_term_months: request.payment_term_months,
+            discount: request.discount
+        });
+        return response;
+    } catch (error) {
+        console.error('Error calculating rent amount:', error);
+        throw error;
+    }
+};
+
+export const calculatePeriodEnd = async (request: PeriodEndCalculationRequest): Promise<PeriodEndCalculationResponse> => {
+    try {
+        const response = await apiClient.post<PeriodEndCalculationResponse>('/payments/calculate-period-end', {
+            period_start: request.period_start,
+            payment_term_months: request.payment_term_months
+        });
+        return response;
+    } catch (error) {
+        console.error('Error calculating period end:', error);
+        throw error;
+    }
+};
+
+export const formatRentNote = async (request: RentNoteRequest): Promise<RentNoteResponse> => {
+    try {
+        const response = await apiClient.post<RentNoteResponse>('/payments/format-rent-note', {
+            base_note: request.base_note || undefined,
+            discount: request.discount
+        });
+        return response;
+    } catch (error) {
+        console.error('Error formatting rent note:', error);
+        throw error;
+    }
+};
+
 export const terminateContract = async (
     contractId: number, 
     terminationDate: string, 

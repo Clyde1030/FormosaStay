@@ -54,6 +54,7 @@ SELECT 149, '台南市鹽水區朝琴路149號', id FROM user_account WHERE emai
 INSERT INTO room (building_id, floor_no, room_no, created_by, updated_by)
 SELECT b.id, v.floor_no, v.room_no, u.id, u.id
 FROM building b, user_account u, (VALUES
+    (1, 'F'),
     (2, 'A'),
     (3, 'A'),
     (3, 'B'),
@@ -122,6 +123,7 @@ INSERT INTO cash_flow_category (code, name, direction) VALUES
 ('daily_supply', '日常用品', '支出'),
 ('misc', '其他', '支出'),
 ('bank_transfer', '匯馬玲帳戶', '轉帳'),
+('laundry_income', '洗烘衣機收入', '收入'),
 ('bank_fee', '匯費', '支出');
 
 -- =========================
