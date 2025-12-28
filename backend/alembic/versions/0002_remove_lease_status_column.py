@@ -5,21 +5,17 @@ Revises: 0001_initial_schema
 Create Date: 2024-01-01 12:00:00.000000
 
 """
-from pathlib import Path
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from database.migration_utils import execute_sql_file
 
 # revision identifiers, used by Alembic.
 revision = '0002_remove_lease_status_column'
 down_revision = '0001_initial_schema'
 branch_labels = None
 depends_on = None
-
-def execute_sql_file(filename: str):
-    sql_path = Path(__file__).parent.parent / "sql" / filename
-    with open(sql_path, "r", encoding="utf-8") as f:
-        op.execute(f.read())
 
 def upgrade() -> None:
     # Drop the unique index that uses status column
@@ -37,15 +33,15 @@ def upgrade() -> None:
 
     op.drop_column('lease', 'status')
 
-    execute_sql_file("0002_v_lease_status.sql")
-    execute_sql_file("0002_v_room_availability.sql")
-    execute_sql_file("0002_v_room_current_tenant.sql")
-    execute_sql_file("0002_v_room_dashboard_summary.sql")
-    execute_sql_file("0002_v_room_electricity_history.sql")
-    execute_sql_file("0002_v_room_payment_history.sql")
-    execute_sql_file("0002_v_tenant_complete.sql")
-    execute_sql_file("0002_v_tenant_lease.sql")
-    execute_sql_file("0002_v_user_account.sql")
+    execute_sql_file(op, "0002_v_lease_status.sql")
+    execute_sql_file(op, "0002_v_room_availability.sql")
+    execute_sql_file(op, "0002_v_room_current_tenant.sql")
+    execute_sql_file(op, "0002_v_room_dashboard_summary.sql")
+    execute_sql_file(op, "0002_v_room_electricity_history.sql")
+    execute_sql_file(op, "0002_v_room_payment_history.sql")
+    execute_sql_file(op, "0002_v_tenant_complete.sql")
+    execute_sql_file(op, "0002_v_tenant_lease.sql")
+    execute_sql_file(op, "0002_v_user_account.sql")
 
 
 def downgrade() -> None:
