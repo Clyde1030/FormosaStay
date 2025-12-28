@@ -153,8 +153,13 @@ const TenantList: React.FC = () => {
                                         {t.line_id && <div className="text-xs text-green-600">Line: {t.line_id}</div>}
                                     </td>
                                     <td className="p-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${t.active_lease ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                            {t.active_lease ? '有效' : '無合約'}
+                                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                                            t.active_lease?.status === '有效' ? 'bg-emerald-100 text-emerald-700' : 
+                                            t.active_lease?.status === '終止' ? 'bg-red-100 text-red-700' :
+                                            t.active_lease?.status === '到期' ? 'bg-orange-100 text-orange-700' :
+                                            'bg-slate-100 text-slate-500'
+                                        }`}>
+                                            {t.active_lease?.status || '無合約'}
                                         </span>
                                     </td>
                                 </tr>

@@ -7,9 +7,9 @@ import {
     addTransaction, updateTransaction, deleteTransaction, 
     addExpense, updateExpense, deleteExpense,
     recordMeterReading, getElectricityRates, addElectricityRate, deleteElectricityRate, getCurrentElectricityRate,
-    getTransactionsByRoom 
+    getTransactionsByRoom, getCashFlowCategories
 } from '../services/propertyService';
-import { Transaction, Expense, Room, Building, Tenant, ElectricityRate } from '../types';
+import { Transaction, Expense, Room, Building, Tenant, ElectricityRate, CashFlowCategory } from '../types';
 
 const FinanceManager: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'payments' | 'electricity' | 'expenses' | 'machines'>('payments');
@@ -269,19 +269,37 @@ const ElectricityTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
 
 const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
     const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [categories, setCategories] = useState<CashFlowCategory[]>([]);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [expenseForm, setExpenseForm] = useState({ category: 'Maintenance', amount: '', description: '', attachmentName: '', date: '' });
+    const [expenseForm, setExpenseForm] = useState({ category: '', amount: '', description: '', attachmentName: '', date: '' });
 
     useEffect(() => {
         const loadData = async () => {
-            const exs = await getExpenses();
+            const [exs, cats] = await Promise.all([getExpenses(), getCashFlowCategories()]);
             setExpenses(exs);
+            setCategories(cats);
         };
         loadData();
     }, []);
 
-    const resetForm = () => setExpenseForm({ category: 'Maintenance', amount: '', description: '', attachmentName: '', date: new Date().toISOString().split('T')[0] });
+    // Set default category when categories are loaded
+    useEffect(() => {
+        if (categories.length > 0) {
+            setExpenseForm(prev => {
+                // Only set if category is empty
+                if (!prev.category) {
+                    return { ...prev, category: categories[0].name };
+                }
+                return prev;
+            });
+        }
+    }, [categories]);
+
+    const resetForm = () => {
+        const defaultCategory = categories.length > 0 ? categories[0].name : '';
+        setExpenseForm({ category: defaultCategory, amount: '', description: '', attachmentName: '', date: new Date().toISOString().split('T')[0] });
+    };
 
     const handleSave = async () => {
         if (editingId) {
@@ -369,12 +387,9 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
                                     value={expenseForm.category}
                                     onChange={(e) => setExpenseForm({...expenseForm, category: e.target.value})}
                                 >
-                                    <option>Maintenance</option>
-                                    <option>Cleaning</option>
-                                    <option>Utilities</option>
-                                    <option>Payroll</option>
-                                    <option>Tax</option>
-                                    <option>Misc</option>
+                                    {categories.map(cat => (
+                                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                    ))}
                                 </select>
                             </div>
                             <div>

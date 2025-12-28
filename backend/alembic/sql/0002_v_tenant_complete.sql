@@ -4,7 +4,7 @@
 -- This view provides comprehensive tenant information including:
 -- - Tenant basic information
 -- - Emergency contacts (aggregated as JSON array)
--- - Current active lease (if exists)
+-- - Current lease (if exists, may be active or inactive)
 -- - Lease assets (JSONB from lease table)
 -- - Room and building information
 -- ============================================================
@@ -45,7 +45,7 @@ SELECT
         '[]'::jsonb
     ) AS emergency_contacts,
     
-    -- Current Active Lease Information
+    -- Lease Information (may be active or inactive)
     l.id AS lease_id,
     l.start_date AS lease_start_date,
     l.end_date AS lease_end_date,
@@ -114,10 +114,8 @@ SELECT
 FROM tenant t
 LEFT JOIN lease_tenant lt ON lt.tenant_id = t.id
     AND lt.tenant_role = '主要'  -- Primary tenant only
+-- Include all leases (active and inactive) - previously filtered: AND l.early_termination_date IS NULL AND l.end_date >= CURRENT_DATE
 LEFT JOIN lease l ON l.id = lt.lease_id
-    -- Active lease only: no early_termination_date and end_date >= CURRENT_DATE
-    AND l.early_termination_date IS NULL
-    AND l.end_date >= CURRENT_DATE
     AND l.deleted_at IS NULL
 LEFT JOIN room r ON r.id = l.room_id
     AND r.deleted_at IS NULL
@@ -136,8 +134,11 @@ ORDER BY t.last_name, t.first_name;
 -- 2. Get all tenants with their emergency contacts and leases:
 --    SELECT * FROM v_tenant_complete;
 --
--- 3. Get tenants with active leases:
+-- 3. Get tenants with leases (active or inactive):
 --    SELECT * FROM v_tenant_complete WHERE lease_id IS NOT NULL;
+--    
+-- 3a. Get tenants with active leases only:
+--    SELECT * FROM v_tenant_complete WHERE lease_status = '有效';
 --
 -- 4. Get emergency contacts for a tenant (as JSON):
 --    SELECT emergency_contacts FROM v_tenant_complete WHERE tenant_id = 1;

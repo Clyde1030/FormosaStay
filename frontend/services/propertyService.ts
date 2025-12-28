@@ -3,7 +3,8 @@ import {
     Building, Room, Tenant, Lease, LeaseStatus, 
     TenantWithLease, Payment, CashFlow, 
     ElectricityRate, MeterReading, Transaction, Expense,
-    TenantWithContract, Contract, PaymentFrequency, DepositStatus
+    TenantWithContract, Contract, PaymentFrequency, DepositStatus,
+    CashFlowCategory
 } from '../types';
 
 // --- Data Fetching ---
@@ -235,6 +236,16 @@ export const getExpenses = async (): Promise<Expense[]> => {
         return [];
     } catch (error) {
         console.error('Error fetching expenses:', error);
+        return [];
+    }
+};
+
+export const getCashFlowCategories = async (): Promise<CashFlowCategory[]> => {
+    try {
+        const data = await apiClient.get<CashFlowCategory[]>('/cash-flow/categories');
+        return data;
+    } catch (error) {
+        console.error('Error fetching cash flow categories:', error);
         return [];
     }
 };

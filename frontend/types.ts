@@ -193,3 +193,11 @@ export interface MeterReading {
     read_date: string;
     read_amount: number;
 }
+
+export interface CashFlowCategory {
+    id: number;
+    code: string;
+    name: string;
+    direction: '收入' | '支出' | '轉帳';
+    description?: string;
+}
