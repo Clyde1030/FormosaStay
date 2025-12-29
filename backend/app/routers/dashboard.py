@@ -20,12 +20,13 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
         rooms_result = await db.execute(select(func.count(Room.id)))
         total_rooms = rooms_result.scalar() or 0
         
-        # Active leases (occupied rooms) - early_termination_date IS NULL AND end_date >= CURRENT_DATE
+        # Active leases (occupied rooms) - early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date
         from sqlalchemy import and_
         leases_result = await db.execute(
             select(func.count(Lease.id)).where(
                 and_(
                     Lease.early_termination_date.is_(None),
+                    Lease.start_date <= func.current_date(),
                     Lease.end_date >= func.current_date(),
                     Lease.deleted_at.is_(None)
                 )
@@ -42,7 +43,7 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
                 select(
                     func.sum(Invoice.due_amount - Invoice.paid_amount).label("total_overdue"),
                     func.count(Invoice.id).label("count")
-                ).where(Invoice.status.in_(["未交", "部分未交"])).where(Invoice.deleted_at.is_(None))
+                ).where(Invoice.status.in_(["unpaid", "partial"])).where(Invoice.deleted_at.is_(None))
             )
             overdue_data = invoices_result.first()
             overdue_total = float(overdue_data.total_overdue) if overdue_data and overdue_data.total_overdue else 0

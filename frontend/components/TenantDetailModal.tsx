@@ -162,7 +162,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
 
     const handlePrint = async () => {
         if (!tenant.currentContract) {
-            alert('無法生成合約：沒有有效的合約資訊');
+            alert('Cannot generate contract: No valid contract information');
             return;
         }
         try {
@@ -442,7 +442,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             <div>
                                                 <label className="text-xs text-slate-400">Status</label>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={`w-2 h-2 rounded-full ${tenant.currentContract.status === '有效' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                                                    <span className={`w-2 h-2 rounded-full ${tenant.currentContract.status === 'active' ? 'bg-emerald-500' : tenant.currentContract.status === 'pending' ? 'bg-blue-500' : 'bg-red-500'}`}></span>
                                                     <span className="font-medium">{tenant.currentContract.status}</span>
                                                 </div>
                                             </div>

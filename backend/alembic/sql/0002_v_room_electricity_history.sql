@@ -37,7 +37,7 @@ SELECT
     inv.due_date,
     inv.due_amount AS electricity_cost,
     inv.paid_amount,
-    inv.status AS payment_status,
+    inv.payment_status AS payment_status,
     
     -- Electricity Rate Information
     er.rate_per_kwh,
@@ -71,13 +71,13 @@ INNER JOIN meter_reading mr ON mr.room_id = r.id
 LEFT JOIN lease l ON l.room_id = r.id
     AND mr.read_date BETWEEN l.start_date AND COALESCE(l.early_termination_date, l.end_date)
 LEFT JOIN invoice inv ON inv.lease_id = l.id 
-    AND inv.category = '電費'
+    AND inv.category = 'electricity'
     AND mr.read_date BETWEEN inv.period_start AND inv.period_end
     AND inv.deleted_at IS NULL
 LEFT JOIN electricity_rate er ON er.room_id = r.id
     AND mr.read_date BETWEEN er.start_date AND er.end_date
 LEFT JOIN lease_tenant lt ON lt.lease_id = l.id 
-    AND lt.tenant_role = '主要'
+    AND lt.tenant_role = 'primary'
 LEFT JOIN tenant t ON t.id = lt.tenant_id
 WHERE r.deleted_at IS NULL
 ORDER BY r.id, mr.read_date DESC;

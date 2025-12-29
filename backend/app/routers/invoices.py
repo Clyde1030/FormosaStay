@@ -124,8 +124,8 @@ async def get_or_create_default_cash_account(db: AsyncSession) -> int:
     if not account:
         # Create default account
         default_account = CashAccount(
-            name="預設帳戶",
-            account_type="銀行"
+            name="Default Account",
+            account_type="bank"
         )
         db.add(default_account)
         await db.flush()
@@ -137,12 +137,12 @@ async def get_or_create_default_cash_account(db: AsyncSession) -> int:
 def map_category_to_invoice_category(category: str) -> str:
     """Map frontend category to invoice category"""
     mapping = {
-        'Rent': '房租',
-        'Electricity': '電費',
-        'Deposit': '押金',
-        'Fee': '罰款'
+        'Rent': 'rent',
+        'Electricity': 'electricity',
+        'Deposit': 'deposit',
+        'Fee': 'penalty'
     }
-    return mapping.get(category, '房租')
+    return mapping.get(category, 'rent')
 
 
 
@@ -168,11 +168,15 @@ async def create_invoice_transaction(
                     detail=f"Room with id {invoice.room_id} not found"
                 )
             
-            # Get active lease for this room
+            # Get active lease for this room (CURRENT_DATE BETWEEN start_date AND end_date)
             lease_result = await db.execute(
                 select(Lease).where(
-                    Lease.room_id == invoice.room_id,
-                    Lease.early_termination_date.is_(None)
+                    and_(
+                        Lease.room_id == invoice.room_id,
+                        Lease.early_termination_date.is_(None),
+                        Lease.start_date <= func.current_date(),
+                        Lease.end_date >= func.current_date()
+                    )
                 ).order_by(Lease.start_date.desc())
             )
             lease = lease_result.scalar_one_or_none()
@@ -200,7 +204,7 @@ async def create_invoice_transaction(
             .join(LeaseTenant, Tenant.id == LeaseTenant.tenant_id)
             .where(
                 LeaseTenant.lease_id == lease_id,
-                LeaseTenant.tenant_role == '主要'
+                LeaseTenant.tenant_role == 'primary'
             )
         )
         tenant_data = tenant_result.first()
@@ -218,7 +222,7 @@ async def create_invoice_transaction(
             period_end=period_end,
             due_date=invoice.due_date,
             due_amount=invoice.amount,
-            paid_amount=invoice.amount if invoice.status == "已交" else 0,
+            paid_amount=invoice.amount if invoice.status == "paid" else 0,
             status=invoice.status
         )
         
@@ -228,10 +232,10 @@ async def create_invoice_transaction(
         # Create cash flow entry
         # Map invoice category to cash flow category code
         invoice_to_cf_category_map = {
-            '房租': 'rent',
-            '電費': 'tenant_electricity',
-            '押金': 'deposit_received',
-            '罰款': 'misc'
+            'rent': 'rent',
+            'electricity': 'tenant_electricity',
+            'deposit': 'deposit_received',
+            'penalty': 'misc'
         }
         category_code = invoice_to_cf_category_map.get(invoice.category, 'rent')
         category_result = await db.execute(
@@ -256,16 +260,17 @@ async def create_invoice_transaction(
         
         # Map payment method
         payment_method_map = {
-            '銀行轉帳': '銀行轉帳',
-            'Transfer': '銀行轉帳',
-            '現金': '現金',
-            'Cash': '現金',
-            'LINE Pay': 'LINE Pay',
-            'LinePay': 'LINE Pay',
-            '其他': '其他',
-            'Other': '其他'
+            'bank': 'bank',
+            'Transfer': 'bank',
+            'cash': 'cash',
+            'Cash': 'cash',
+            'LINE_Pay': 'LINE_Pay',
+            'LINE Pay': 'LINE_Pay',
+            'LinePay': 'LINE_Pay',
+            'other': 'other',
+            'Other': 'other'
         }
-        backend_payment_method = payment_method_map.get(invoice.payment_method or "Transfer", '銀行轉帳')
+        backend_payment_method = payment_method_map.get(invoice.payment_method or "Transfer", 'bank')
         
         # Create cash flow
         cash_flow = CashFlow(
@@ -323,7 +328,7 @@ async def list_invoice_transactions(
             .join(Room, Lease.room_id == Room.id)
             .join(LeaseTenant, Lease.id == LeaseTenant.lease_id)
             .join(Tenant, LeaseTenant.tenant_id == Tenant.id)
-            .where(LeaseTenant.tenant_role == '主要')
+            .where(LeaseTenant.tenant_role == 'primary')
             .order_by(Invoice.due_date.desc())
         )
         transactions = result.all()
@@ -341,7 +346,7 @@ async def list_invoice_transactions(
                 period_start=inv.period_start,
                 period_end=inv.period_end,
                 status=inv.status,
-                paid_date=inv.due_date if inv.status == "已交" else None,
+                paid_date=inv.due_date if inv.status == "paid" else None,
                 payment_method=None,
                 note=None
             )
@@ -378,7 +383,7 @@ async def update_invoice_transaction(
             invoice.category = invoice_update.category
         if invoice_update.amount is not None:
             invoice.due_amount = invoice_update.amount
-            if invoice.status == "已交":
+            if invoice.status == "paid":
                 invoice.paid_amount = invoice_update.amount
         if invoice_update.due_date is not None:
             invoice.due_date = invoice_update.due_date
@@ -388,9 +393,9 @@ async def update_invoice_transaction(
             invoice.period_end = invoice_update.period_end
         if invoice_update.status is not None:
             invoice.status = invoice_update.status
-            if invoice_update.status == "已交" and invoice_update.amount:
+            if invoice_update.status == "paid" and invoice_update.amount:
                 invoice.paid_amount = invoice_update.amount
-            elif invoice_update.status != "已交":
+            elif invoice_update.status != "paid":
                 invoice.paid_amount = 0
         
         await db.commit()
@@ -407,7 +412,7 @@ async def update_invoice_transaction(
             .join(LeaseTenant, Tenant.id == LeaseTenant.tenant_id)
             .where(
                 LeaseTenant.lease_id == invoice.lease_id,
-                LeaseTenant.tenant_role == '主要'
+                LeaseTenant.tenant_role == 'primary'
             )
         )
         tenant_data = tenant_result.first()

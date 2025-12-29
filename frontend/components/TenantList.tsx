@@ -154,12 +154,13 @@ const TenantList: React.FC = () => {
                                     </td>
                                     <td className="p-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                                            t.active_lease?.status === '有效' ? 'bg-emerald-100 text-emerald-700' : 
-                                            t.active_lease?.status === '終止' ? 'bg-red-100 text-red-700' :
-                                            t.active_lease?.status === '到期' ? 'bg-orange-100 text-orange-700' :
+                                            t.active_lease?.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 
+                                            t.active_lease?.status === 'pending' ? 'bg-blue-100 text-blue-700' :
+                                            t.active_lease?.status === 'terminated' ? 'bg-red-100 text-red-700' :
+                                            t.active_lease?.status === 'expired' ? 'bg-orange-100 text-orange-700' :
                                             'bg-slate-100 text-slate-500'
                                         }`}>
-                                            {t.active_lease?.status || '無合約'}
+                                            {t.active_lease?.status || 'No Contract'}
                                         </span>
                                     </td>
                                 </tr>

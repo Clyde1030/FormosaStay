@@ -9,9 +9,9 @@ class CashFlowCategoryResponse(BaseModel):
     """Schema for cash flow category response"""
     id: int
     code: str
-    name: str
+    chinese_name: str
     direction: str
-    description: Optional[str] = None
+    category_group: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -26,7 +26,7 @@ class CashFlowCreate(BaseModel):
     room_id: Optional[int] = Field(None, description="Room ID (optional)")
     flow_date: date = Field(..., description="Date of the cash flow")
     amount: Decimal = Field(..., gt=0, description="Amount (must be positive)")
-    payment_method: str = Field(..., description="Payment method: '現金', '銀行轉帳', 'LINE Pay', '其他'")
+    payment_method: str = Field(..., description="Payment method: 'cash', 'bank', 'LINE_Pay', 'other'")
     note: Optional[str] = Field(None, description="Optional note")
 
 

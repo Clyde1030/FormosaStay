@@ -45,14 +45,14 @@ class InvoiceTransactionCreate(BaseModel):
     """Schema for creating an invoice transaction (rent, electricity, deposit)"""
     room_id: int = Field(..., description="Room ID")
     lease_id: Optional[int] = Field(None, description="Lease ID (optional, will be inferred from room if not provided)")
-    category: str = Field(..., description="Category: '房租', '電費', '押金', or '罰款'")
+    category: str = Field(..., description="Category: 'rent', 'electricity', 'deposit', or 'penalty'")
     amount: Decimal = Field(..., gt=0, description="Invoice amount")
     due_date: date = Field(..., description="Due date")
     period_start: Optional[date] = Field(None, description="Period start date (for rent/electricity)")
     period_end: Optional[date] = Field(None, description="Period end date (for rent/electricity)")
-    status: str = Field(default="已交", description="Invoice status: '已交', '未交', '部分未交', '呆帳', '歸還', '取消'")
-    paid_date: Optional[date] = Field(None, description="Paid date (if status is '已交')")
-    payment_method: Optional[str] = Field(None, description="Payment method: '銀行轉帳', '現金', 'LINE Pay', '其他'")
+    status: str = Field(default="paid", description="Invoice status: 'paid', 'unpaid', 'partial', 'uncollectable', 'returned', 'canceled'")
+    paid_date: Optional[date] = Field(None, description="Paid date (if status is 'paid')")
+    payment_method: Optional[str] = Field(None, description="Payment method: 'bank', 'cash', 'LINE_Pay', 'other'")
     note: Optional[str] = Field(None, description="Optional note")
     cash_account_id: Optional[int] = Field(None, description="Cash account ID (optional, will use default if not provided)")
 

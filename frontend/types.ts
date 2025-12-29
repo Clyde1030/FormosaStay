@@ -7,18 +7,20 @@ export enum PaymentFrequency {
     YEARLY = '年繳'
 }
 
-// Lease status - using Chinese values to match database
+// Lease status - using English values to match database
 export enum LeaseStatus {
-    ACTIVE = '有效',
-    TERMINATED = '終止',
-    EXPIRED = '到期'
+    PENDING = 'pending',
+    ACTIVE = 'active',
+    TERMINATED = 'terminated',
+    EXPIRED = 'expired'
 }
 
 // Added for component compatibility - display labels
 export enum ContractStatus {
-    ACTIVE = '有效',
-    TERMINATED = '終止',
-    EXPIRED = '到期'
+    PENDING = 'pending',
+    ACTIVE = 'active',
+    TERMINATED = 'terminated',
+    EXPIRED = 'expired'
 }
 
 // Added for component compatibility - display labels
@@ -64,7 +66,7 @@ export interface Tenant {
     first_name: string;
     last_name: string;
     name?: string; // Component uses name
-    gender: '男' | '女' | '其他';
+    gender: 'M' | 'F' | 'O';
     birthday: string;
     personal_id: string;
     idNumber?: string;
@@ -119,10 +121,10 @@ export interface TenantWithContract extends TenantWithLease {
 
 // --- Finance Types ---
 
-// Invoice category - using Chinese values to match database
-export type InvoiceCategory = '房租' | '電費' | '罰款' | '押金';
-// Invoice status - using Chinese values to match database
-export type InvoiceStatus = '未交' | '已交' | '部分未交' | '呆帳' | '歸還' | '取消';
+// Invoice category - using English values to match database
+export type InvoiceCategory = 'rent' | 'electricity' | 'penalty' | 'deposit';
+// Invoice status - using English values to match database
+export type InvoiceStatus = 'unpaid' | 'paid' | 'partial' | 'uncollectable' | 'returned' | 'canceled';
 
 export interface Invoice {
     id: number;
@@ -172,13 +174,13 @@ export interface Expense {
     cash_account_id?: number;
     building_id?: number;
     room_id?: number;
-    payment_method?: '現金' | '銀行轉帳' | 'LINE Pay' | '其他';
+    payment_method?: 'cash' | 'bank' | 'LINE_Pay' | 'other';
 }
 
 export interface CashAccount {
     id: number;
-    name: string;
-    account_type: '現金' | '銀行' | '第三方支付';
+    chinese_name: string;
+    account_type: 'cash' | 'bank' | 'clearing' | 'deposit';
     note?: string;
 }
 
@@ -191,7 +193,7 @@ export interface CashFlow {
     room_id?: number;
     flow_date: string;
     amount: number;
-    payment_method: '現金' | '銀行轉帳' | 'LINE Pay' | '其他';
+    payment_method: 'cash' | 'bank' | 'LINE_Pay' | 'other';
     note?: string;
 }
 
@@ -213,7 +215,7 @@ export interface MeterReading {
 export interface CashFlowCategory {
     id: number;
     code: string;
-    name: string;
-    direction: '收入' | '支出' | '轉帳';
-    description?: string;
+    chinese_name: string;
+    direction: 'in' | 'out' | 'transfer';
+    category_group?: string;
 }

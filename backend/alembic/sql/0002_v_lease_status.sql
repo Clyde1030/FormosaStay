@@ -2,18 +2,20 @@
 -- Lease Status View
 -- ============================================================
 -- This view calculates lease status based on business rules:
--- IF early_termination_date IS NOT NULL → 終止
--- ELSE IF end_date < CURRENT_DATE → 到期
--- ELSE → 有效
+-- IF early_termination_date IS NOT NULL → terminated
+-- ELSE IF CURRENT_DATE < start_date → pending
+-- ELSE IF CURRENT_DATE BETWEEN start_date AND end_date → active
+-- ELSE → expired
 -- ============================================================
 
 CREATE OR REPLACE VIEW v_lease_status AS
 SELECT 
     l.id AS lease_id,
     CASE 
-        WHEN l.early_termination_date IS NOT NULL THEN '終止'
-        WHEN l.end_date < CURRENT_DATE THEN '到期'
-        ELSE '有效'
+        WHEN l.early_termination_date IS NOT NULL THEN 'terminated'
+        WHEN CURRENT_DATE < l.start_date THEN 'pending'
+        WHEN CURRENT_DATE BETWEEN l.start_date AND l.end_date THEN 'active'
+        ELSE 'expired'
     END AS status
 FROM lease l
 WHERE l.deleted_at IS NULL;

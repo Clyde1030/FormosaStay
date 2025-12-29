@@ -286,7 +286,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
         building_id: '',
         floor_no: '',
         room_id: '',
-        payment_method: '現金'
+        payment_method: 'cash'
     });
 
     useEffect(() => {
@@ -324,7 +324,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
             setExpenseForm(prev => {
                 // Only set if category is empty
                 if (!prev.category) {
-                    return { ...prev, category: categories[0].name };
+                    return { ...prev, category: categories[0].chinese_name };
                 }
                 return prev;
             });
@@ -345,7 +345,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
     }, [cashAccounts]);
 
     const resetForm = () => {
-        const defaultCategory = categories.length > 0 ? categories[0].name : '';
+        const defaultCategory = categories.length > 0 ? categories[0].chinese_name : '';
         const defaultCashAccount = cashAccounts.length > 0 ? cashAccounts[0].id.toString() : '';
         setExpenseForm({ 
             category: defaultCategory, 
@@ -357,7 +357,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
             building_id: '',
             floor_no: '',
             room_id: '',
-            payment_method: '現金'
+            payment_method: 'cash'
         });
     };
 
@@ -384,7 +384,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
             cash_account_id: expenseForm.cash_account_id ? Number(expenseForm.cash_account_id) : undefined,
             building_id: expenseForm.building_id ? Number(expenseForm.building_id) : undefined,
             room_id: expenseForm.room_id ? Number(expenseForm.room_id) : undefined,
-            payment_method: expenseForm.payment_method as '現金' | '銀行轉帳' | 'LINE Pay' | '其他'
+            payment_method: expenseForm.payment_method as 'cash' | 'bank' | 'LINE_Pay' | 'other'
         };
 
         if (editingId) {
@@ -420,7 +420,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
                 building_id: ex.building_id.toString(),
                 floor_no: room?.floor_no?.toString() || '',
                 room_id: ex.room_id?.toString() || '',
-                payment_method: ex.payment_method || '現金'
+                payment_method: ex.payment_method || 'cash'
             });
         } else {
             setExpenseForm({
@@ -433,7 +433,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
                 building_id: '',
                 floor_no: '',
                 room_id: '',
-                payment_method: ex.payment_method || '現金'
+                payment_method: ex.payment_method || 'cash'
             });
         }
         setIsAdding(true);
@@ -488,7 +488,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
                                     onChange={(e) => setExpenseForm({...expenseForm, category: e.target.value})}
                                 >
                                     {categories.map(cat => (
-                                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                        <option key={cat.id} value={cat.chinese_name}>{cat.chinese_name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -501,7 +501,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
                                 >
                                     {cashAccounts.map(acc => (
                                         <option key={acc.id} value={acc.id.toString()}>
-                                            {acc.name} ({acc.account_type})
+                                            {acc.chinese_name} ({acc.account_type})
                                         </option>
                                     ))}
                                 </select>
@@ -513,10 +513,10 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
                                     value={expenseForm.payment_method}
                                     onChange={(e) => setExpenseForm({...expenseForm, payment_method: e.target.value})}
                                 >
-                                    <option value="現金">現金</option>
-                                    <option value="銀行轉帳">銀行轉帳</option>
-                                    <option value="LINE Pay">LINE Pay</option>
-                                    <option value="其他">其他</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="bank">Bank Transfer</option>
+                                    <option value="LINE_Pay">LINE Pay</option>
+                                    <option value="other">Other</option>
                                 </select>
                             </div>
                             <div>
@@ -915,7 +915,7 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
                                     };
                                     const mappedType = typeMap[cat.code] || 'Rent';
                                     return (
-                                        <option key={cat.id} value={mappedType}>{cat.name}</option>
+                                        <option key={cat.id} value={mappedType}>{cat.chinese_name}</option>
                                     );
                                 })}
                             </select>

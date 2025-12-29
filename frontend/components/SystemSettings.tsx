@@ -247,15 +247,15 @@ CREATE INDEX idx_meter_room_date ON meter_reading(room_id, read_date);
 CREATE TABLE cash_flow_category (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
+    chinese_name TEXT NOT NULL,
     direction TEXT NOT NULL CHECK (direction IN ('in', 'out', 'transfer')),
-    description TEXT
+    category_group TEXT
 );
 
 CREATE TABLE cash_account (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name TEXT NOT NULL,
-    account_type TEXT NOT NULL CHECK (account_type IN ('cash', 'bank', 'third_party')),
+    chinese_name TEXT NOT NULL,
+    account_type TEXT NOT NULL CHECK (account_type IN ('bank', 'cash', 'clearing', 'deposit')),
     note TEXT
 );
 
@@ -321,25 +321,25 @@ CREATE TABLE cash_flow_attachment (
         ON DELETE CASCADE
 );
 
-INSERT INTO cash_flow_category (code, name, direction) VALUES
-('rent', '租金', 'in'),
-('deposit_received', '押金', 'in'),
-('deposit_returned', '退押金', 'out'),
-('referral_fee', '介紹費', 'out'),
-('tenant_electricity', '住戶電費', 'in'),
-('manager_salary', '管理員薪水', 'out'),
-('manager_bonus', '管理員獎金', 'out'),
-('maintenance', '維修費', 'out'),
-('new_equipment', '新設備', 'out'),
-('building_electricity', '大樓電費支出', 'out'),
-('water', '水費', 'out'),
-('tax', '稅', 'out'),
-('internet', '網路費', 'out'),
-('stationery', '文具', 'out'),
-('daily_supply', '日常用品', 'out'),
-('misc', '其他', 'out'),
-('bank_transfer', '匯馬玲帳戶', 'transfer'),
-('bank_fee', '匯費', 'out');
+INSERT INTO cash_flow_category (code, chinese_name, direction, category_group) VALUES
+('rent', '租金', 'in', 'tenant'),
+('deposit_received', '押金', 'in', 'tenant'),
+('deposit_returned', '退押金', 'out', 'tenant'),
+('referral_fee', '介紹費', 'out', 'operation'),
+('tenant_electricity', '住戶電費', 'out', 'tenant'),
+('manager_salary', '管理員薪水', 'out', 'operation'),
+('manager_bonus', '管理員獎金', 'out', 'operation'),
+('maintenance', '維修費', 'out', 'operation'),
+('new_equipment', '新設備', 'out', 'operation'),
+('building_electricity', '大樓電費支出', 'out', 'operation'),
+('water', '水費', 'out', 'operation'),
+('tax', '稅', 'out', 'operation'),
+('internet', '網路費', 'out', 'operation'),
+('stationery', '文具', 'out', 'operation'),
+('daily_supply', '日常用品', 'out', 'operation'),
+('misc', '其他', 'out', 'operation'),
+('bank_transfer', '匯馬玲帳戶', 'transfer', 'operation'),
+('bank_fee', '匯費', 'out', 'operation');
 
 # Business Rule Trigger
 CREATE OR REPLACE FUNCTION enforce_room_building_match()

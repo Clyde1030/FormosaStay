@@ -81,13 +81,14 @@ class LeaseService:
         tenant_name = f"{tenant.first_name} {tenant.last_name}"
         tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
 
-        # Check if room already has an active lease (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
+        # Check if room already has an active lease (early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
         existing_lease_result = await db.execute(
             select(Lease)
             .where(
                 and_(
                     Lease.room_id == lease_data.room_id,
                     Lease.early_termination_date.is_(None),
+                    Lease.start_date <= func.current_date(),
                     Lease.end_date >= func.current_date(),
                     Lease.deleted_at.is_(None)
                 )
@@ -97,7 +98,7 @@ class LeaseService:
         existing_lease = existing_lease_result.scalar_one_or_none()
         if existing_lease:
             # Get primary tenant
-            primary_tenant_relation = next((lt for lt in existing_lease.tenants if lt.tenant_role == '主要'), None)
+            primary_tenant_relation = next((lt for lt in existing_lease.tenants if lt.tenant_role == 'primary'), None)
             if primary_tenant_relation:
                 existing_tenant = primary_tenant_relation.tenant
                 existing_tenant_name = f"{existing_tenant.first_name} {existing_tenant.last_name}"
@@ -152,7 +153,7 @@ class LeaseService:
         lease_tenant = LeaseTenant(
             lease_id=new_lease.id,
             tenant_id=tenant.id,
-            tenant_role="主要",
+            tenant_role="primary",
             joined_at=lease_data.start_date,
         )
         db.add(lease_tenant)
@@ -204,8 +205,8 @@ class LeaseService:
         else:
             tenant_info = f"Lease ID: {lease_id}"
 
-        # Check if lease is active (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
-        if lease.early_termination_date is not None or lease.end_date < date.today():
+        # Check if lease is active (early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
+        if lease.get_status() != 'active':
             current_status = lease.get_status()
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
@@ -279,8 +280,8 @@ class LeaseService:
         else:
             tenant_info = f"Lease ID: {lease_id}"
 
-        # Check if lease is active (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
-        if lease.early_termination_date is not None or lease.end_date < date.today():
+        # Check if lease is active (early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
+        if lease.get_status() != 'active':
             current_status = lease.get_status()
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,

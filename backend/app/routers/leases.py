@@ -30,7 +30,7 @@ async def create_lease(
     """
     lease = await LeaseService.create_lease(db, lease_data)
     # Extract primary tenant_id for backward compatibility
-    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
     
     # Build lease dict manually to handle datetime conversion
     lease_dict = {
@@ -77,7 +77,7 @@ async def renew_lease(
     """
     lease = await LeaseService.renew_lease(db, lease_id, renew_data)
     # Extract primary tenant_id for backward compatibility
-    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
     
     # Build lease dict manually to handle datetime conversion
     lease_dict = {
@@ -124,7 +124,7 @@ async def terminate_lease(
     """
     lease = await LeaseService.terminate_lease(db, lease_id, terminate_data)
     # Extract primary tenant_id for backward compatibility
-    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
     
     # Build lease dict manually to handle datetime conversion
     lease_dict = {
@@ -170,7 +170,7 @@ async def get_lease(
             detail=f"Lease with id {lease_id} not found"
         )
     # Extract primary tenant_id for backward compatibility
-    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
+    primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
     
     # Build lease dict manually to handle datetime conversion
     lease_dict = {
@@ -221,7 +221,7 @@ async def list_leases(
     result = []
     for lease in leases:
         # Extract primary tenant_id for backward compatibility
-        primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
+        primary_tenant = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
         
         # Build lease dict manually to handle datetime conversion
         lease_dict = {

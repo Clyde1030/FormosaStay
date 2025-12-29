@@ -5,8 +5,8 @@ from app.models.base import Base, AuditMixin
 from sqlalchemy.orm import relationship
 
 # Define ENUM types
-invoice_category_type = ENUM('房租', '電費', '罰款', '押金', name='invoice_category', create_type=False)
-payment_status_type = ENUM('未交', '已交', '部分未交', '呆帳', '歸還', '取消', name='payment_status', create_type=False)
+invoice_category_type = ENUM('rent', 'electricity', 'penalty', 'deposit', name='invoice_category', create_type=False)
+payment_status_type = ENUM('unpaid', 'paid', 'partial', 'uncollectable', 'returned', 'canceled', name='payment_status', create_type=False)
 
 
 class Invoice(Base, AuditMixin):
@@ -14,13 +14,13 @@ class Invoice(Base, AuditMixin):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     lease_id = Column(BigInteger, ForeignKey("lease.id", ondelete="RESTRICT"), nullable=False)
-    category = Column(invoice_category_type, nullable=False)  # '房租', '電費', '罰款', '押金'
+    category = Column(invoice_category_type, nullable=False)  # 'rent', 'electricity', 'penalty', 'deposit'
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
     due_date = Column(Date, nullable=False)
     due_amount = Column(Numeric(10, 2), nullable=False)
     paid_amount = Column(Numeric(10, 2), nullable=False, default=0)
-    status = Column(payment_status_type, nullable=False)  # '未交', '已交', '部分未交', '呆帳', '歸還', '取消'
+    status = Column(payment_status_type, nullable=False)  # 'unpaid', 'paid', 'partial', 'uncollectable', 'returned', 'canceled'
 
     # Relationships
     lease = relationship("Lease", back_populates="invoices")

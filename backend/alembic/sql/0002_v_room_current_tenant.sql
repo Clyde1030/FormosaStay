@@ -39,7 +39,7 @@ SELECT
     t.phone,
     t.email,
     t.line_id,
-    t.address AS tenant_address,
+    t.home_address AS tenant_address,
     
     -- Lease Information
     l.id AS lease_id,
@@ -50,11 +50,12 @@ SELECT
     l.deposit,
     l.pay_rent_on,
     l.payment_term,
-    -- Calculate lease status: IF early_termination_date IS NOT NULL → 終止, ELSE IF end_date < CURRENT_DATE → 到期, ELSE → 有效
+    -- Calculate lease status: IF early_termination_date IS NOT NULL → terminated, ELSE IF CURRENT_DATE < start_date → pending, ELSE IF CURRENT_DATE BETWEEN start_date AND end_date → active, ELSE → expired
     CASE 
-        WHEN l.early_termination_date IS NOT NULL THEN '終止'
-        WHEN l.end_date < CURRENT_DATE THEN '到期'
-        ELSE '有效'
+        WHEN l.early_termination_date IS NOT NULL THEN 'terminated'
+        WHEN CURRENT_DATE < l.start_date THEN 'pending'
+        WHEN CURRENT_DATE BETWEEN l.start_date AND l.end_date THEN 'active'
+        ELSE 'expired'
     END AS lease_status,
     l.vehicle_plate,
     l.assets,
@@ -71,12 +72,12 @@ SELECT
 FROM room r
 INNER JOIN building b ON b.id = r.building_id
 LEFT JOIN lease l ON l.room_id = r.id 
-    -- Active lease only: no early_termination_date and end_date >= CURRENT_DATE
+    -- Active lease only: no early_termination_date and CURRENT_DATE BETWEEN start_date AND end_date
     AND l.early_termination_date IS NULL
-    AND l.end_date >= CURRENT_DATE
+    AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
     AND l.deleted_at IS NULL
 LEFT JOIN lease_tenant lt ON lt.lease_id = l.id
 LEFT JOIN tenant t ON t.id = lt.tenant_id 
     AND t.deleted_at IS NULL
 WHERE r.deleted_at IS NULL
-ORDER BY r.id, lt.tenant_role DESC; -- Primary tenant first
+ORDER BY r.id, CASE WHEN lt.tenant_role = 'primary' THEN 0 ELSE 1 END; -- Primary tenant first

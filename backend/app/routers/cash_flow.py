@@ -19,15 +19,15 @@ router = APIRouter(prefix="/cash-flow", tags=["Cash Flow"])
 
 @router.get("/categories", response_model=List[CashFlowCategoryResponse])
 async def list_cash_flow_categories(
-    description: Optional[str] = Query(None, description="Filter by description (e.g., 'tenant', 'operation')"),
+    category_group: Optional[str] = Query(None, description="Filter by category_group (e.g., 'tenant', 'operation')"),
     db: AsyncSession = Depends(get_db)
 ):
-    """List all cash flow categories, optionally filtered by description"""
+    """List all cash flow categories, optionally filtered by category_group"""
     try:
         query = select(CashFlowCategory).order_by(CashFlowCategory.id)
         
-        if description:
-            query = query.where(CashFlowCategory.description == description)
+        if category_group:
+            query = query.where(CashFlowCategory.category_group == category_group)
         
         result = await db.execute(query)
         categories = result.scalars().all()
@@ -35,9 +35,9 @@ async def list_cash_flow_categories(
         return [CashFlowCategoryResponse(
             id=c.id,
             code=c.code,
-            name=c.name,
+            chinese_name=c.chinese_name,
             direction=c.direction,
-            description=c.description
+            category_group=c.category_group
         ) for c in categories]
     except Exception as e:
         raise HTTPException(
@@ -71,7 +71,7 @@ async def list_cash_flows(
                 "amount": float(flow.amount),
                 "payment_method": flow.payment_method,
                 "note": flow.note,
-                "category_name": category.name,
+                "category_name": category.chinese_name,
                 "category_code": category.code,
                 "category_direction": category.direction,
                 "direction": category.direction
@@ -142,7 +142,7 @@ async def create_cash_flow(
             amount=new_cash_flow.amount,
             payment_method=new_cash_flow.payment_method,
             note=new_cash_flow.note,
-            category_name=category.name,
+            category_name=category.chinese_name,
             category_code=category.code
         )
     except HTTPException:
@@ -232,7 +232,7 @@ async def update_cash_flow(
             amount=cash_flow.amount,
             payment_method=cash_flow.payment_method,
             note=cash_flow.note,
-            category_name=category.name,
+            category_name=category.chinese_name,
             category_code=category.code
         )
     except HTTPException:
@@ -285,7 +285,7 @@ async def list_cash_accounts(db: AsyncSession = Depends(get_db)):
         return [
             {
                 "id": a.id,
-                "name": a.name,
+                "name": a.chinese_name,
                 "account_type": a.account_type,
                 "note": a.note,
             }

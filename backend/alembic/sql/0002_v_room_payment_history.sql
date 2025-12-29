@@ -21,7 +21,7 @@ SELECT
     inv.due_date,
     inv.due_amount,
     inv.paid_amount,
-    inv.status AS payment_status,
+    inv.payment_status AS payment_status,
     inv.created_at AS invoice_created_at,
     
     -- Lease Information
@@ -35,13 +35,13 @@ SELECT
     
     -- Payment Status Details (cast to TEXT to avoid enum conflict)
     CASE 
-        WHEN inv.status = '已交' THEN 'Paid'::TEXT
-        WHEN inv.status = '未交' THEN 'Unpaid'::TEXT
-        WHEN inv.status = '部分未交' THEN 'Partial'::TEXT
-        WHEN inv.status = '呆帳' THEN 'Bad Debt'::TEXT
-        WHEN inv.status = '歸還' THEN 'Returned'::TEXT
-        WHEN inv.status = '取消' THEN 'Canceled'::TEXT
-        ELSE inv.status::TEXT
+        WHEN inv.payment_status = 'paid' THEN 'Paid'::TEXT
+        WHEN inv.payment_status = 'unpaid' THEN 'Unpaid'::TEXT
+        WHEN inv.payment_status = 'partial' THEN 'Partial'::TEXT
+        WHEN inv.payment_status = 'uncollectable' THEN 'Bad Debt'::TEXT
+        WHEN inv.payment_status = 'returned' THEN 'Returned'::TEXT
+        WHEN inv.payment_status = 'canceled' THEN 'Canceled'::TEXT
+        ELSE inv.payment_status::TEXT
     END AS payment_status_en,
     
     -- Calculate outstanding amount
@@ -49,13 +49,13 @@ SELECT
     
     -- Period display (cast to TEXT to avoid enum conflict)
     CASE 
-        WHEN inv.category = '房租' THEN 
+        WHEN inv.category = 'rent' THEN 
             (TO_CHAR(inv.period_start, 'YYYY-MM') || ' Rent')::TEXT
-        WHEN inv.category = '電費' THEN 
+        WHEN inv.category = 'electricity' THEN 
             (TO_CHAR(inv.period_start, 'YYYY-MM') || ' Electricity')::TEXT
-        WHEN inv.category = '罰款' THEN 
+        WHEN inv.category = 'penalty' THEN 
             ('Penalty: ' || TO_CHAR(inv.due_date, 'YYYY-MM-DD'))::TEXT
-        WHEN inv.category = '押金' THEN 
+        WHEN inv.category = 'deposit' THEN 
             'Deposit'::TEXT
         ELSE inv.category::TEXT
     END AS period_display
@@ -65,7 +65,7 @@ INNER JOIN lease l ON l.room_id = r.id
 LEFT JOIN invoice inv ON inv.lease_id = l.id 
     AND inv.deleted_at IS NULL
 LEFT JOIN lease_tenant lt ON lt.lease_id = l.id 
-    AND lt.tenant_role = '主要'  -- Primary tenant only
+    AND lt.tenant_role = 'primary'  -- Primary tenant only
 LEFT JOIN tenant t ON t.id = lt.tenant_id
 WHERE r.deleted_at IS NULL
     AND l.deleted_at IS NULL

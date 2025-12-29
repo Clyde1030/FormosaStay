@@ -74,20 +74,20 @@ export const getTransactions = async (): Promise<Transaction[]> => {
             roomId: p.room_id,
             tenantName: p.tenant_name || '',
             contractId: p.lease_id,
-            type: p.category === '房租' ? 'Rent' : 
-                  p.category === '電費' ? 'Electricity' : 
-                  p.category === '罰款' ? 'Fee' : 
-                  p.category === '押金' ? 'Deposit' : 'Rent',
+            type: p.category === 'rent' ? 'Rent' : 
+                  p.category === 'electricity' ? 'Electricity' : 
+                  p.category === 'penalty' ? 'Fee' : 
+                  p.category === 'deposit' ? 'Deposit' : 'Rent',
             amount: Number(p.amount) || 0,
             dueDate: p.due_date || '',
-            status: p.status === '已交' ? 'Paid' :
-                    p.status === '未交' ? 'Unpaid' :
-                    p.status === '部分未交' ? 'Unpaid' : 
-                    p.status === '呆帳' ? 'Overdue' : 'Unpaid',
-            paidDate: p.paid_date || (p.status === '已交' ? p.due_date : undefined),
-            method: p.payment_method === '銀行轉帳' ? 'Transfer' :
-                    p.payment_method === '現金' ? 'Cash' :
-                    p.payment_method === 'LINE Pay' ? 'LinePay' : undefined,
+            status: p.status === 'paid' ? 'Paid' :
+                    p.status === 'unpaid' ? 'Unpaid' :
+                    p.status === 'partial' ? 'Unpaid' : 
+                    p.status === 'uncollectable' ? 'Overdue' : 'Unpaid',
+            paidDate: p.paid_date || (p.status === 'paid' ? p.due_date : undefined),
+            method: p.payment_method === 'bank' ? 'Transfer' :
+                    p.payment_method === 'cash' ? 'Cash' :
+                    p.payment_method === 'LINE_Pay' ? 'LinePay' : undefined,
             note: p.note,
             periodStart: p.period_start || '',
             periodEnd: p.period_end || ''
@@ -107,10 +107,10 @@ export const getTransactionsByRoom = async (roomId: any): Promise<Transaction[]>
             roomId: roomId,
             tenantName: p.tenant_name || '',
             contractId: p.lease_id,
-            type: p.category === '房租' ? 'Rent' : 
-                  p.category === '電費' ? 'Electricity' : 
-                  p.category === '罰款' ? 'Fee' : 
-                  p.category === '押金' ? 'Deposit' : 'Rent',
+            type: p.category === 'rent' ? 'Rent' : 
+                  p.category === 'electricity' ? 'Electricity' : 
+                  p.category === 'penalty' ? 'Fee' : 
+                  p.category === 'deposit' ? 'Deposit' : 'Rent',
             amount: Number(p.due_amount) || 0,
             dueDate: p.due_date || '',
             status: p.payment_status_en === 'Paid' ? 'Paid' :
@@ -256,8 +256,8 @@ export const getExpenses = async (): Promise<Expense[]> => {
     try {
         const data = await apiClient.get<any[]>('/cash-flow/');
         
-        // Filter for expenses (direction = '支出')
-        const expenses = data.filter(cf => cf.category_direction === '支出' || cf.direction === '支出');
+        // Filter for expenses (direction = 'out')
+        const expenses = data.filter(cf => cf.category_direction === 'out' || cf.direction === 'out');
         
         return expenses.map(cf => ({
             id: cf.id?.toString() || '',
@@ -277,10 +277,10 @@ export const getExpenses = async (): Promise<Expense[]> => {
     }
 };
 
-export const getCashFlowCategories = async (description?: string): Promise<CashFlowCategory[]> => {
+export const getCashFlowCategories = async (category_group?: string): Promise<CashFlowCategory[]> => {
     try {
-        const url = description 
-            ? `/cash-flow/categories?description=${description}`
+        const url = category_group 
+            ? `/cash-flow/categories?category_group=${category_group}`
             : '/cash-flow/categories';
         const data = await apiClient.get<CashFlowCategory[]>(url);
         return data;
@@ -295,7 +295,7 @@ export const getCashAccounts = async (): Promise<CashAccount[]> => {
         const data = await apiClient.get<any[]>('/cash-flow/accounts');
         return data.map(acc => ({
             id: acc.id,
-            name: acc.name,
+            chinese_name: acc.name || acc.chinese_name, // Support both for backward compatibility
             account_type: acc.account_type,
             note: acc.note
         }));
@@ -321,11 +321,11 @@ export const addTransaction = async (tx: Partial<Transaction>) => {
     try {
         // Map frontend Transaction type to backend category
         const categoryMap: { [key: string]: string } = {
-            'Rent': '房租',
-            'Electricity': '電費',
-            'Deposit': '押金',
-            'Fee': '罰款',
-            'MachineIncome': '房租' // Machine income will be handled separately
+            'Rent': 'rent',
+            'Electricity': 'electricity',
+            'Deposit': 'deposit',
+            'Fee': 'penalty',
+            'MachineIncome': 'rent' // Machine income will be handled separately
         };
         
         // Handle MachineIncome separately (create cash flow only, no invoice)
@@ -347,7 +347,7 @@ export const addTransaction = async (tx: Partial<Transaction>) => {
                 cash_account_id: cashAccountId,
                 flow_date: tx.dueDate || new Date().toISOString().split('T')[0],
                 amount: tx.amount || 0,
-                payment_method: '現金',
+                payment_method: 'cash',
                 note: tx.description || 'Coin Laundry Collection'
             };
             
@@ -359,20 +359,20 @@ export const addTransaction = async (tx: Partial<Transaction>) => {
             throw new Error('Room ID is required for payment transactions');
         }
         
-        // Map Transaction type to Invoice category (Chinese)
+        // Map Transaction type to Invoice category (English)
         const invoiceCategoryMap: { [key: string]: string } = {
-            'Rent': '房租',
-            'Electricity': '電費',
-            'Deposit': '押金',
-            'Fee': '罰款'
+            'Rent': 'rent',
+            'Electricity': 'electricity',
+            'Deposit': 'deposit',
+            'Fee': 'penalty'
         };
         
         const paymentData: any = {
             room_id: Number(tx.roomId),
-            category: invoiceCategoryMap[tx.type || 'Rent'] || '房租',
+            category: invoiceCategoryMap[tx.type || 'Rent'] || 'rent',
             amount: tx.amount || 0,
             due_date: tx.dueDate || new Date().toISOString().split('T')[0],
-            status: tx.status === 'Paid' ? '已交' : '未交',
+            status: tx.status === 'Paid' ? 'paid' : 'unpaid',
             period_start: tx.periodStart,
             period_end: tx.periodEnd,
             note: tx.note
@@ -388,12 +388,12 @@ export const addTransaction = async (tx: Partial<Transaction>) => {
         
         if (tx.method) {
             const methodMap: { [key: string]: string } = {
-                'Transfer': '銀行轉帳',
-                'Cash': '現金',
-                'LinePay': 'LINE Pay',
-                'Other': '其他'
+                'Transfer': 'bank',
+                'Cash': 'cash',
+                'LinePay': 'LINE_Pay',
+                'Other': 'other'
             };
-            paymentData.payment_method = methodMap[tx.method] || '銀行轉帳';
+            paymentData.payment_method = methodMap[tx.method] || 'bank';
         }
         
         await apiClient.post('/invoices/', paymentData);
@@ -409,10 +409,10 @@ export const updateTransaction = async (id: string, updates: Partial<Transaction
         
         if (updates.type) {
             const categoryMap: { [key: string]: string } = {
-                'Rent': '房租',
-                'Electricity': '電費',
-                'Deposit': '押金',
-                'Fee': '罰款'
+                'Rent': 'rent',
+                'Electricity': 'electricity',
+                'Deposit': 'deposit',
+                'Fee': 'penalty'
             };
             updateData.category = categoryMap[updates.type];
         }
@@ -435,9 +435,9 @@ export const updateTransaction = async (id: string, updates: Partial<Transaction
         
         if (updates.status) {
             const statusMap: { [key: string]: string } = {
-                'Paid': '已交',
-                'Unpaid': '未交',
-                'Overdue': '呆帳'
+                'Paid': 'paid',
+                'Unpaid': 'unpaid',
+                'Overdue': 'uncollectable'
             };
             updateData.status = statusMap[updates.status] || updates.status;
         }
@@ -448,12 +448,12 @@ export const updateTransaction = async (id: string, updates: Partial<Transaction
         
         if (updates.method) {
             const methodMap: { [key: string]: string } = {
-                'Transfer': '銀行轉帳',
-                'Cash': '現金',
-                'LinePay': 'LINE Pay',
-                'Other': '其他'
+                'Transfer': 'bank',
+                'Cash': 'cash',
+                'LinePay': 'LINE_Pay',
+                'Other': 'other'
             };
-            updateData.payment_method = methodMap[updates.method] || '銀行轉帳';
+            updateData.payment_method = methodMap[updates.method] || 'bank';
         }
         
         if (updates.note !== undefined) {
@@ -484,7 +484,7 @@ export const addExpense = async (ex: Partial<Expense>) => {
     try {
         // Get operation categories to find the category ID
         const categories = await getCashFlowCategories('operation');
-        const category = categories.find(c => c.name === ex.category);
+        const category = categories.find(c => c.chinese_name === ex.category);
         
         if (!category) {
             throw new Error(`Category "${ex.category}" not found in operation categories`);
@@ -502,7 +502,7 @@ export const addExpense = async (ex: Partial<Expense>) => {
             cash_account_id: cashAccountId,
             flow_date: ex.date || new Date().toISOString().split('T')[0],
             amount: ex.amount || 0,
-            payment_method: ex.payment_method || '現金', // Use provided or default to cash
+            payment_method: ex.payment_method || 'cash', // Use provided or default to cash
             note: ex.description || ''
         };
         

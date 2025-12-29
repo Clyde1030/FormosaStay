@@ -29,11 +29,12 @@ async def list_rooms(
     result = await db.execute(query)
     rooms = result.scalars().all()
     
-    # Get active leases to determine room status (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
+    # Get active leases to determine room status (early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
     leases_result = await db.execute(
         select(Lease).where(
             and_(
                 Lease.early_termination_date.is_(None),
+                Lease.start_date <= func.current_date(),
                 Lease.end_date >= func.current_date(),
                 Lease.deleted_at.is_(None)
             )
@@ -80,12 +81,13 @@ async def get_room(room_id: int, db: AsyncSession = Depends(get_db)):
             detail=f"Room with id {room_id} not found"
         )
     
-    # Check if room has active lease (early_termination_date IS NULL AND end_date >= CURRENT_DATE)
+    # Check if room has active lease (early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
     lease_result = await db.execute(
         select(Lease).where(
             and_(
                 Lease.room_id == room_id,
                 Lease.early_termination_date.is_(None),
+                Lease.start_date <= func.current_date(),
                 Lease.end_date >= func.current_date(),
                 Lease.deleted_at.is_(None)
             )
@@ -151,7 +153,7 @@ async def get_room_tenant(room_id: int, db: AsyncSession = Depends(get_db)):
         result = await db.execute(
             text("""
                 SELECT * FROM v_room_current_tenant 
-                WHERE room_id = :room_id AND tenant_role = '主要'
+                WHERE room_id = :room_id AND tenant_role = 'primary'
                 LIMIT 1
             """),
             {"room_id": room_id}
@@ -228,7 +230,7 @@ async def get_room_tenants(room_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/{room_id}/invoices")
 async def get_room_invoices(
     room_id: int,
-    category: Optional[str] = Query(None, description="Filter by category (房租, 電費, 罰款, 押金)"),
+    category: Optional[str] = Query(None, description="Filter by category (rent, electricity, penalty, deposit)"),
     status_filter: Optional[str] = Query(None, description="Filter by invoice status"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),

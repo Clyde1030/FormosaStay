@@ -6,7 +6,7 @@ select
 	r.code as role,
 	r.description as role_description,
 	ua.email,
-	ua.password_hash,
+	ua.user_password,
 	ua.created_at,
 	ua.is_active	
 from user_role ur

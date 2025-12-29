@@ -5,9 +5,9 @@ from sqlalchemy.orm import relationship
 from app.models.base import Base, AuditMixin
 
 # Define ENUM types
-cash_direction_type = ENUM('收入', '支出', '轉帳', name='cash_direction_type', create_type=False)
-cash_account_type = ENUM('現金', '銀行', '第三方支付', name='cash_account_type', create_type=False)
-payment_method_type = ENUM('現金', '銀行轉帳', 'LINE Pay', '其他', name='payment_method_type', create_type=False)
+cash_direction_type = ENUM('in', 'out', 'transfer', name='cash_direction_type', create_type=False)
+cash_account_type = ENUM('bank', 'cash', 'clearing', 'deposit', name='cash_account_type', create_type=False)
+payment_method_type = ENUM('cash', 'bank', 'LINE_Pay', 'other', name='payment_method_type', create_type=False)
 
 
 class CashFlowCategory(Base):
@@ -15,9 +15,9 @@ class CashFlowCategory(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     code = Column(String, nullable=False, unique=True)
-    name = Column(String, nullable=False)
-    direction = Column(cash_direction_type, nullable=False)  # '收入', '支出', '轉帳'
-    description = Column(Text, nullable=True)
+    chinese_name = Column(String, nullable=False)
+    direction = Column(cash_direction_type, nullable=False)  # 'in', 'out', 'transfer'
+    category_group = Column(Text, nullable=True)
 
     # Relationships
     cash_flows = relationship("CashFlow", back_populates="category")
@@ -27,8 +27,8 @@ class CashAccount(Base):
     __tablename__ = "cash_account"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False)
-    account_type = Column(cash_account_type, nullable=False)  # '現金', '銀行', '第三方支付'
+    chinese_name = Column(String, nullable=False)
+    account_type = Column(cash_account_type, nullable=False)  # 'bank', 'cash', 'clearing', 'deposit'
     note = Column(Text, nullable=True)
 
     # Relationships
@@ -47,7 +47,7 @@ class CashFlow(Base, AuditMixin):
     invoice_id = Column(BigInteger, ForeignKey("invoice.id"), nullable=True)
     flow_date = Column(Date, nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
-    payment_method = Column(payment_method_type, nullable=False)  # '現金', '銀行轉帳', 'LINE Pay', '其他'
+    payment_method = Column(payment_method_type, nullable=False)  # 'cash', 'bank', 'LINE_Pay', 'other'
     note = Column(Text, nullable=True)
 
     # Relationships

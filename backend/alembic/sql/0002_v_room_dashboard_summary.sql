@@ -21,13 +21,13 @@ SELECT
     b.building_no,
     b.address AS building_address,
     
-    -- Current Lease Status
+    -- Current Lease Status (active leases only)
     CASE 
         WHEN EXISTS (
             SELECT 1 FROM lease l 
             WHERE l.room_id = r.id 
             AND l.early_termination_date IS NULL
-            AND l.end_date >= CURRENT_DATE
+            AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
             AND l.deleted_at IS NULL
         ) THEN true
         ELSE false
@@ -64,7 +64,7 @@ SELECT
         (SELECT COUNT(*) 
          FROM invoice inv 
          WHERE inv.lease_id = l.id 
-         AND inv.status = '未交'
+         AND inv.payment_status = 'unpaid'
          AND inv.deleted_at IS NULL),
         0
     ) AS unpaid_invoices,
@@ -96,7 +96,7 @@ SELECT
         (SELECT SUM(inv.due_amount)
          FROM invoice inv
          WHERE inv.lease_id = l.id
-         AND inv.category = '電費'
+         AND inv.category = 'electricity'
          AND inv.deleted_at IS NULL),
         0
     ) AS total_electricity_cost,
@@ -105,7 +105,7 @@ SELECT
         (SELECT COUNT(*)
          FROM invoice inv
          WHERE inv.lease_id = l.id
-         AND inv.category = '電費'
+         AND inv.category = 'electricity'
          AND inv.deleted_at IS NULL),
         0
     ) AS electricity_bill_count
@@ -113,12 +113,12 @@ SELECT
 FROM room r
 INNER JOIN building b ON b.id = r.building_id
 LEFT JOIN lease l ON l.room_id = r.id 
-    -- Active lease only: no early_termination_date and end_date >= CURRENT_DATE
+    -- Active lease only: no early_termination_date and CURRENT_DATE BETWEEN start_date AND end_date
     AND l.early_termination_date IS NULL
-    AND l.end_date >= CURRENT_DATE
+    AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
     AND l.deleted_at IS NULL
 LEFT JOIN lease_tenant lt ON lt.lease_id = l.id 
-    AND lt.tenant_role = '主要'
+    AND lt.tenant_role = 'primary'
 LEFT JOIN tenant t ON t.id = lt.tenant_id 
     AND t.deleted_at IS NULL
 WHERE r.deleted_at IS NULL

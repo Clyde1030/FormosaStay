@@ -22,7 +22,7 @@ SELECT
     t.phone,
     t.email,
     t.line_id,
-    t.address AS tenant_address,
+    t.home_address AS tenant_address,
     t.created_at AS tenant_created_at,
     t.updated_at AS tenant_updated_at,
     
@@ -54,11 +54,12 @@ SELECT
     l.deposit,
     l.pay_rent_on,
     l.payment_term,
-    -- Calculate lease status: IF early_termination_date IS NOT NULL → 終止, ELSE IF end_date < CURRENT_DATE → 到期, ELSE → 有效
+    -- Calculate lease status: IF early_termination_date IS NOT NULL → terminated, ELSE IF CURRENT_DATE < start_date → pending, ELSE IF CURRENT_DATE BETWEEN start_date AND end_date → active, ELSE → expired
     CASE 
-        WHEN l.early_termination_date IS NOT NULL THEN '終止'
-        WHEN l.end_date < CURRENT_DATE THEN '到期'
-        ELSE '有效'
+        WHEN l.early_termination_date IS NOT NULL THEN 'terminated'
+        WHEN CURRENT_DATE < l.start_date THEN 'pending'
+        WHEN CURRENT_DATE BETWEEN l.start_date AND l.end_date THEN 'active'
+        ELSE 'expired'
     END AS lease_status,
     l.vehicle_plate,
     l.assets AS lease_assets,  -- JSONB array of assets: [{"type": "鑰匙", "quantity": 1}, ...]
@@ -68,16 +69,16 @@ SELECT
         (
             SELECT SUM((elem->>'quantity')::integer)
             FROM jsonb_array_elements(COALESCE(l.assets, '[]'::jsonb)) AS elem
-            WHERE elem->>'type' = '鑰匙'
+            WHERE elem->>'type' = 'key'
         ),
         0
-    ) AS asset_keys_quantity,  -- 鑰匙 quantity
+    ) AS asset_keys_quantity,  -- key quantity
     
     COALESCE(
         (
             SELECT SUM((elem->>'quantity')::integer)
             FROM jsonb_array_elements(COALESCE(l.assets, '[]'::jsonb)) AS elem
-            WHERE elem->>'type' = '磁扣'
+            WHERE elem->>'type' = 'fob'
         ),
         0
     ) AS asset_fob_quantity,  -- fob quantity
@@ -86,10 +87,10 @@ SELECT
         (
             SELECT SUM((elem->>'quantity')::integer)
             FROM jsonb_array_elements(COALESCE(l.assets, '[]'::jsonb)) AS elem
-            WHERE elem->>'type' = '遙控器'
+            WHERE elem->>'type' = 'controller'
         ),
         0
-    ) AS asset_remote_quantity,  -- 遙控器 quantity
+    ) AS asset_remote_quantity,  -- controller quantity
     
     l.created_at AS lease_created_at,
     l.updated_at AS lease_updated_at,
@@ -113,8 +114,8 @@ SELECT
 
 FROM tenant t
 LEFT JOIN lease_tenant lt ON lt.tenant_id = t.id
-    AND lt.tenant_role = '主要'  -- Primary tenant only
--- Include all leases (active and inactive) - previously filtered: AND l.early_termination_date IS NULL AND l.end_date >= CURRENT_DATE
+    AND lt.tenant_role = 'primary'  -- Primary tenant only
+-- Include all leases (active and inactive) - previously filtered: AND l.early_termination_date IS NULL AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
 LEFT JOIN lease l ON l.id = lt.lease_id
     AND l.deleted_at IS NULL
 LEFT JOIN room r ON r.id = l.room_id
@@ -138,7 +139,7 @@ ORDER BY t.last_name, t.first_name;
 --    SELECT * FROM v_tenant_complete WHERE lease_id IS NOT NULL;
 --    
 -- 3a. Get tenants with active leases only:
---    SELECT * FROM v_tenant_complete WHERE lease_status = '有效';
+--    SELECT * FROM v_tenant_complete WHERE lease_status = 'active';
 --
 -- 4. Get emergency contacts for a tenant (as JSON):
 --    SELECT emergency_contacts FROM v_tenant_complete WHERE tenant_id = 1;

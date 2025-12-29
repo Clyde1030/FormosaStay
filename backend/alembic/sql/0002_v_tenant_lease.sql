@@ -14,7 +14,7 @@ SELECT
     t.phone,
     t.email,
     t.line_id,
-    t.address,
+    t.home_address AS address,
     t.created_by AS tenant_created_by,
     t.updated_by AS tenant_updated_by,
     t.created_at AS tenant_created_at,
