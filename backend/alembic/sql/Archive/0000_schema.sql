@@ -7,23 +7,6 @@
 -- ============================================================
 
 -- ############################################################
--- ### ENUM Types ###
--- ############################################################
-CREATE TYPE gender_type AS ENUM ('M','F','O');
-CREATE TYPE payment_term_type AS ENUM ('annual','semi-annual','seasonal','monthly');
-CREATE TYPE lease_amendment_type AS ENUM ('rent_change', 'discount', 'other');
-CREATE TYPE discount_type AS ENUM ('free_months','fixed_amount','percentage');
-CREATE TYPE tenant_role_type AS ENUM ('primary','secondary');
-CREATE TYPE payment_status AS ENUM ('unpaid','paid','partial','uncollectable','returned','canceled');
-CREATE TYPE invoice_category AS ENUM ('rent','electricity', 'penalty', 'deposit');
-CREATE TYPE adjustment_source_type AS ENUM ('promotion','manual','penalty');
-CREATE TYPE cash_direction_type AS ENUM ('in','out','transfer');
-CREATE TYPE cash_account_type AS ENUM ('bank', 'cash', 'clearing', 'deposit');
-CREATE TYPE payment_method_type AS ENUM ('cash','bank','LINE_Pay','other');
-
- 
-
--- ############################################################
 -- ### Tables ###
 -- ############################################################
 
@@ -31,7 +14,7 @@ CREATE TYPE payment_method_type AS ENUM ('cash','bank','LINE_Pay','other');
 CREATE TABLE user_account (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     email TEXT NOT NULL,
-    user_password TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -59,16 +42,6 @@ CREATE TABLE user_role (
         FOREIGN KEY (role_id) REFERENCES role(id) ON DELETE CASCADE
 );
 
-CREATE TABLE employee (
-    id BIGINT GENERATED ALWAYS AS IDENTITY,
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
-    role_id SMALLINT NOT NULL,
-    email TEXT NOT NULL,
-    phone TEXT NOT NULL,
-
-    CONSTRAINT uq_employee UNIQUE (email)    
-);
 
 
 -- Buildings & Room 
@@ -76,8 +49,6 @@ CREATE TABLE building (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     building_no INTEGER NOT NULL,
     address TEXT NOT NULL,
-    landlord_name TEXT,
-    landlord_address TEXT,
     deleted_at TIMESTAMPTZ,
     created_by BIGINT,
     updated_by BIGINT,
@@ -106,19 +77,24 @@ CREATE TABLE room (
     updated_at TIMESTAMPTZ,
 
     CONSTRAINT pk_room PRIMARY KEY (id),
-    CONSTRAINT uq_room UNIQUE (building_id, floor_no, room_no),
     CONSTRAINT fk_room_building
         FOREIGN KEY (building_id) REFERENCES building(id) ON DELETE RESTRICT,
     CONSTRAINT fk_room_created_by
         FOREIGN KEY (created_by) REFERENCES user_account(id),
     CONSTRAINT fk_room_updated_by
         FOREIGN KEY (updated_by) REFERENCES user_account(id),
+    CONSTRAINT uq_room UNIQUE (building_id, floor_no, room_no),
     CONSTRAINT chk_room_no_format CHECK (room_no ~ '^[A-Z]$')
 );
+
+-- This is not needed because (building_id, floor_no, room_no) defines a row
+CREATE INDEX idx_room_building ON room(building_id);
 
 
 
 -- Tenant
+CREATE TYPE gender_type AS ENUM ('男','女','其他');
+
 CREATE TABLE tenant (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     first_name TEXT NOT NULL,
@@ -129,12 +105,12 @@ CREATE TABLE tenant (
     phone TEXT NOT NULL,
     email TEXT,
     line_id TEXT,
-    home_address TEXT NOT NULL,
-    deleted_at TIMESTAMPTZ,
+    address TEXT NOT NULL,
     created_by BIGINT,
     updated_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ,
 
     CONSTRAINT pk_tenant PRIMARY KEY (id),
     CONSTRAINT uq_tenant_personal_id UNIQUE (personal_id),
@@ -160,24 +136,28 @@ CREATE TABLE tenant_emergency_contact (
 
 
 -- Lease
+CREATE TYPE lease_status AS ENUM ('有效','終止','到期');
+
+CREATE TYPE payment_term_type AS ENUM ('年繳','半年繳','季繳','月繳');
+
 CREATE TABLE lease (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     room_id BIGINT NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     early_termination_date DATE,
-    termination_reason TEXT,
     monthly_rent NUMERIC(10,2) NOT NULL,
     deposit NUMERIC(10,2) NOT NULL,
     pay_rent_on SMALLINT NOT NULL,
     payment_term payment_term_type NOT NULL,
+    status lease_status NOT NULL,
     assets JSONB,
     vehicle_plate TEXT,
-    deleted_at TIMESTAMPTZ,
     created_by BIGINT,
     updated_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ,
 
     CONSTRAINT pk_lease PRIMARY KEY (id),
     CONSTRAINT fk_lease_room
@@ -197,57 +177,16 @@ CREATE TABLE lease (
         FOREIGN KEY (updated_by) REFERENCES user_account(id)    
 );
 
--- lease_amendment does NOT modify lease values directly
-CREATE TABLE lease_amendment (
-    id BIGINT GENERATED ALWAYS AS IDENTITY,
-    lease_id BIGINT NOT NULL,
-    amendment_type lease_amendment_type NOT NULL,
-    effective_date DATE NOT NULL,
+CREATE INDEX idx_lease_room ON lease(room_id);
+-- One active lease per room
+CREATE UNIQUE INDEX uq_active_lease_per_room
+ON lease(room_id)
+WHERE status = '有效' AND deleted_at IS NULL;
 
-    -- Financial deltas (nullable depending on amendment_type)
-    old_monthly_rent NUMERIC(10,2),
-    new_monthly_rent NUMERIC(10,2),
 
-    -- DISCOUNT
-    discount_type discount_type,
-    discount_value NUMERIC(10,2),
-    applies_to_payment_term payment_term_type,
-    billing_cycle_months INTEGER,
 
-    reason TEXT NOT NULL,
-    created_by BIGINT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted_at TIMESTAMPTZ,
-
-    CONSTRAINT pk_lease_amendment PRIMARY KEY (id),
-
-    CONSTRAINT fk_lease_amendment_lease
-        FOREIGN KEY (lease_id) REFERENCES lease(id),
-
-    CONSTRAINT fk_lease_amendment_created_by
-        FOREIGN KEY (created_by) REFERENCES user_account(id),
-
-    -- Rent change amendments must have both values
-    CONSTRAINT chk_rent_change_values
-        CHECK (
-            amendment_type <> 'rent_change'
-            OR (
-                old_monthly_rent IS NOT NULL
-                AND new_monthly_rent IS NOT NULL
-                AND old_monthly_rent >= 0
-                AND new_monthly_rent >= 0
-            )
-        ),
-    
-    CONSTRAINT chk_discount_values
-        CHECK (
-            amendment_type <> 'discount'
-            OR (
-                discount_type IS NOT NULL
-                AND discount_value IS NOT NULL
-            )
-        )
-);
+-- Lease Tenant
+CREATE TYPE tenant_role_type AS ENUM ('主要','次要');
 
 CREATE TABLE lease_tenant (
     lease_id BIGINT NOT NULL,
@@ -262,10 +201,18 @@ CREATE TABLE lease_tenant (
         FOREIGN KEY (tenant_id) REFERENCES tenant(id) ON DELETE RESTRICT
 );
 
+-- Primary tenant for each lease
+CREATE UNIQUE INDEX uq_primary_tenant
+ON lease_tenant(lease_id)
+WHERE tenant_role = '主要';
+
 
 
 -- Invoice: only track tenant's rent, electricity, penalty, and deposit
--- and reflect final payable amounts
+CREATE TYPE payment_status AS ENUM ('未交','已交','部分未交','呆帳','歸還','取消');
+
+CREATE TYPE invoice_category AS ENUM ('房租','電費', '罰款', '押金');
+
 CREATE TABLE invoice (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     lease_id BIGINT NOT NULL,
@@ -275,7 +222,7 @@ CREATE TABLE invoice (
     due_date DATE NOT NULL,
     due_amount NUMERIC(10,2) NOT NULL,
     paid_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
-    payment_status payment_status NOT NULL,
+    status payment_status NOT NULL,
     created_by BIGINT,
     updated_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -296,24 +243,18 @@ CREATE TABLE invoice (
         FOREIGN KEY (updated_by) REFERENCES user_account(id)
 );
 
-CREATE TABLE invoice_adjustment (
-    id BIGINT GENERATED ALWAYS AS IDENTITY,
-    invoice_id BIGINT NOT NULL,
-    source_type adjustment_source_type NOT NULL,
-    source_id BIGINT,
-    description TEXT NOT NULL,
-    amount NUMERIC(10,2) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT pk_invoice_adjustment PRIMARY KEY (id),
-    CONSTRAINT fk_adj_invoice
-        FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE CASCADE
-);
+CREATE INDEX idx_invoice_lease ON invoice(lease_id);
+
+CREATE UNIQUE INDEX uq_invoice_period_active
+ON invoice(lease_id, category, period_start, period_end)
+WHERE deleted_at IS NULL;
 
 
 
 -- Electricity
 CREATE TABLE electricity_rate (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
+    building_id BIGINT NOT NULL,
     room_id BIGINT,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
@@ -324,6 +265,8 @@ CREATE TABLE electricity_rate (
     updated_at TIMESTAMPTZ,
 
     CONSTRAINT pk_electricity_rate PRIMARY KEY (id),
+    CONSTRAINT fk_rate_building
+        FOREIGN KEY (building_id) REFERENCES building(id),
     CONSTRAINT fk_rate_room
         FOREIGN KEY (room_id) REFERENCES room(id),
     CONSTRAINT fk_rate_created_by
@@ -352,28 +295,39 @@ CREATE TABLE meter_reading (
         FOREIGN KEY (updated_by) REFERENCES user_account(id)
 );
 
+CREATE INDEX idx_meter_room_date ON meter_reading(room_id, read_date);
+
 
 
 -- Cash Flow
+CREATE TYPE cash_direction_type AS ENUM ('收入','支出','轉帳');
+
 CREATE TABLE cash_flow_category (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     code TEXT NOT NULL,
-    chinese_name TEXT NOT NULL,
+    name TEXT NOT NULL,
     direction cash_direction_type NOT NULL,
-    category_group TEXT,
+    description TEXT,
 
     CONSTRAINT pk_cash_flow_category PRIMARY KEY (id),
     CONSTRAINT uq_cash_flow_category_code UNIQUE (code)
 );
 
+
+CREATE TYPE cash_account_type AS ENUM ('現金','銀行','第三方支付');
+
 CREATE TABLE cash_account (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
+    name TEXT NOT NULL,
     account_type cash_account_type NOT NULL,
-    chinese_name TEXT NOT NULL,
     note TEXT,
 
     CONSTRAINT pk_cash_account PRIMARY KEY (id)
 );
+
+
+
+CREATE TYPE payment_method_type AS ENUM ('現金','銀行轉帳','LINE Pay','其他');
 
 CREATE TABLE cash_flow (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -387,11 +341,11 @@ CREATE TABLE cash_flow (
     amount NUMERIC(10,2) NOT NULL,
     payment_method payment_method_type NOT NULL,
     note TEXT,
-    deleted_at TIMESTAMPTZ,
     created_by BIGINT,
     updated_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ,    
+    updated_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ,
 
     CONSTRAINT pk_cash_flow PRIMARY KEY (id),
     CONSTRAINT fk_cf_category
@@ -419,6 +373,14 @@ CREATE TABLE cash_flow (
         FOREIGN KEY (updated_by) REFERENCES user_account(id)
 );
 
+CREATE INDEX idx_cf_date ON cash_flow(flow_date);
+
+CREATE INDEX idx_cf_category ON cash_flow(category_id);
+
+CREATE INDEX idx_cf_account ON cash_flow(cash_account_id);
+
+CREATE INDEX idx_cf_lease ON cash_flow(lease_id);
+
 CREATE TABLE cash_flow_attachment (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     cash_flow_id BIGINT NOT NULL,
@@ -438,30 +400,6 @@ CREATE TABLE cash_flow_attachment (
     CONSTRAINT fk_attachment_updated_by
         FOREIGN KEY (updated_by) REFERENCES user_account(id)
 );
-
--- ############################################################
--- ### Indexes ###
--- ############################################################
-CREATE UNIQUE INDEX uq_invoice_period_active
-ON invoice(lease_id, category, period_start, period_end)
-WHERE deleted_at IS NULL;
-
-CREATE UNIQUE INDEX uq_rent_change_effective
-ON lease_amendment(lease_id, effective_date)
-WHERE amendment_type = 'rent_change'
-  AND deleted_at IS NULL;
-
--- One primary tenant for each lease
-CREATE UNIQUE INDEX uq_primary_tenant
-ON lease_tenant(lease_id)
-WHERE tenant_role = 'primary';
-
-CREATE INDEX idx_invoice_lease ON invoice(lease_id);
-CREATE INDEX idx_meter_room_date ON meter_reading(room_id, read_date);
-CREATE INDEX idx_cf_date ON cash_flow(flow_date);
-CREATE INDEX idx_cf_category ON cash_flow(category_id);
-CREATE INDEX idx_cf_account ON cash_flow(cash_account_id);
-CREATE INDEX idx_cf_lease ON cash_flow(lease_id);
 
 
 
@@ -516,41 +454,6 @@ BEGIN
     RETURN NEW;
 END ;
 $$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION check_amendment_effective_date()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_lease_start_date DATE;
-    v_lease_end_date DATE;
-BEGIN
-    SELECT l.start_date, l.end_date
-    INTO v_lease_start_date, v_lease_end_date
-    FROM lease l
-    WHERE l.id = NEW.lease_id;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Lease with id % not found', NEW.lease_id;
-    END IF;
-
-    -- Main rule: effective_date must not be before lease start_date
-    IF NEW.effective_date < v_lease_start_date THEN
-        RAISE EXCEPTION
-            'Amendment effective_date (%) cannot precede lease start_date (%)', NEW.effective_date, v_lease_start_date;
-    END IF;
-
-    -- effective_date should not be after lease end_date
-    IF NEW.effective_date > v_lease_end_date THEN
-        RAISE EXCEPTION
-            'Amendment effective_date (%) cannot be after lease end_date (%)',
-            NEW.effective_date, v_lease_end_date;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
 
 CREATE OR REPLACE FUNCTION prevent_deleted_parent()
 RETURNS trigger AS $$
@@ -631,8 +534,8 @@ BEGIN
     FOR elem IN SELECT * FROM jsonb_array_elements(NEW.assets)
     LOOP
         -- Check that type is one of the allowed values
-        IF elem->>'type' NOT IN ('key', 'fob', 'controller') THEN
-            RAISE EXCEPTION 'Invalid asset type: %. Allowed types are: key, fob, controller', elem->>'type';
+        IF elem->>'type' NOT IN ('鑰匙', '磁扣', '遙控器') THEN
+            RAISE EXCEPTION 'Invalid asset type: %. Allowed types are: 鑰匙, 磁扣, 遙控器', elem->>'type';
         END IF;
         
         -- Check that quantity is a positive integer
@@ -675,67 +578,29 @@ BEFORE INSERT OR UPDATE ON lease_tenant
 FOR EACH ROW
 EXECUTE FUNCTION prevent_deleted_tenant();
 
-CREATE TRIGGER trg_lease_amendment_effective_date
-BEFORE INSERT OR UPDATE OF effective_date, lease_id ON lease_amendment
-FOR EACH ROW
-EXECUTE FUNCTION check_amendment_effective_date();
-
--- =====================================================
--- soft_delete Function
--- =====================================================
--- Returns:
---   1 if a row was soft-deleted
---   0 if the row was already soft-deleted or not found
---  -1 if table not allowed
--- Raises exception only on critical errors (e.g. invalid column)
--- =====================================================
-
-CREATE OR REPLACE FUNCTION soft_delete(p_table TEXT, p_id BIGINT)
-RETURNS SMALLINT AS $$
-DECLARE
-    v_allowed_tables CONSTANT TEXT[] := ARRAY[
+-- ############################################################
+-- ### Functions ###
+-- ############################################################
+CREATE OR REPLACE FUNCTION soft_delete(
+    p_table TEXT,
+    p_id BIGINT
+) RETURNS VOID AS $$
+BEGIN
+    IF p_table NOT IN (
         'building',
         'room',
         'tenant',
         'lease',
         'invoice',
-        'cash_flow',
-        'lease_amendment'  -- added if you want to soft-delete amendments
-    ];
-    v_row_count INTEGER := 0;
-BEGIN
-    -- Validate table is allowed
-    IF p_table = ANY(v_allowed_tables) THEN
-        -- Use fully qualified safe dynamic SQL
-        EXECUTE format(
-            $dyn$
-                UPDATE %I
-                SET deleted_at = now()
-                WHERE id = $1
-                  AND deleted_at IS NULL
-                RETURNING 1
-            $dyn$,
-            p_table
-        )
-        INTO v_row_count
-        USING p_id;
-
-        -- If no row was updated (either not found or already deleted)
-        IF v_row_count IS NULL THEN
-            v_row_count := 0;
-        END IF;
-
-        RETURN v_row_count;  -- 1 = deleted, 0 = already deleted or not found
-    ELSE
-        RETURN -1;  -- Table not allowed
+        'cash_flow'
+    ) THEN
+        RAISE EXCEPTION 'Soft delete not allowed on table %', p_table;
     END IF;
 
-EXCEPTION
-    WHEN undefined_column THEN
-        RAISE EXCEPTION 'Table % does not have expected columns (id or deleted_at)', p_table
-        USING ERRCODE = 'undefined_column';
-    WHEN OTHERS THEN
-        RAISE EXCEPTION 'Error soft-deleting % with id %: %', p_table, p_id, SQLERRM
-        USING ERRCODE = SQLSTATE;
+    EXECUTE format(
+        'UPDATE %I SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL',
+        p_table
+    ) USING p_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;
+-- ############################################################

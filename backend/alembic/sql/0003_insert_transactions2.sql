@@ -16,6 +16,9 @@ INSERT INTO user_account (email, password_hash) VALUES
 ('bboy80345@gmail.com',   'admin1030'),
 ('ys.yang884532@gmail.com', 'manager884532');
 
+insert into employee (first_name, last_name, email, phone, role_id) values
+('月香', '楊', 'ys.yang884532@gmail.com', '0921631690', 2);
+
 -- =========================
 -- Assign roles to users
 -- =========================
@@ -38,14 +41,14 @@ WHERE u.email = 'ys.yang884532@gmail.com';
 -- Buildings
 -- =========================
 
-INSERT INTO building (building_no, address, created_by)
-SELECT 2, '台南市鹽水區和平路65巷9弄2號', id FROM user_account WHERE email = 'bboy80345@gmail.com'
+INSERT INTO building (building_no, address, landlord_name, landlord_address, created_by)
+SELECT 2, '台南市鹽水區和平路65巷9弄2號', '李信毅', '台南市後壁區新嘉里白沙屯 120號之12', id FROM user_account WHERE email = 'bboy80345@gmail.com'
 UNION
-SELECT 6, '台南市鹽水區和平路65巷9弄6號', id FROM user_account WHERE email = 'bboy80345@gmail.com'
+SELECT 6, '台南市鹽水區和平路65巷9弄6號', '李信毅', '台南市後壁區新嘉里白沙屯 120號之12', id FROM user_account WHERE email = 'bboy80345@gmail.com'
 UNION
-SELECT 147, '台南市鹽水區朝琴路147號', id FROM user_account WHERE email = 'bboy80345@gmail.com'
+SELECT 147, '台南市鹽水區朝琴路147號', '李信毅', '台南市後壁區新嘉里白沙屯 120號之12', id FROM user_account WHERE email = 'bboy80345@gmail.com'
 UNION
-SELECT 149, '台南市鹽水區朝琴路149號', id FROM user_account WHERE email = 'bboy80345@gmail.com';
+SELECT 149, '台南市鹽水區朝琴路149號', '李信毅', '台南市後壁區新嘉里白沙屯 120號之12', id FROM user_account WHERE email = 'bboy80345@gmail.com';
 
 
 -- =========================
@@ -105,24 +108,37 @@ WHERE b.building_no = 6 AND u.email = 'bboy80345@gmail.com';
 -- Cash Flow Categories
 -- =========================
 
-INSERT INTO cash_flow_category (code, name, direction, category_group) VALUES
-('rent', '租金', '收入', 'tenant'),
-('deposit_received', '押金', '收入', 'tenant'),
-('deposit_returned', '退押金', '支出', 'tenant'),
-('referral_fee', '介紹費', '支出', 'operation'),
-('tenant_electricity', '住戶電費', '支出', 'tenant'),
-('manager_salary', '管理員薪水', '支出', 'operation'),
-('manager_bonus', '管理員獎金', '支出', 'operation'),
-('maintenance', '維修費', '支出', 'operation'),
-('new_equipment', '新設備', '支出', 'operation'),
-('building_electricity', '大樓電費支出', '支出', 'operation'),
-('water', '水費', '支出', 'operation'),
-('tax', '稅', '支出', 'operation'),
-('internet', '網路費', '支出', 'operation'),
-('stationery', '文具', '支出', 'operation'),
-('daily_supply', '日常用品', '支出', 'operation'),
-('misc', '其他', '支出', 'operation'),
-('bank_transfer', '匯馬玲帳戶', '轉帳', 'operation'),
-('laundry_income', '洗烘衣機收入', '收入', 'operation'),
-('bank_fee', '匯費', '支出', 'operation');
+INSERT INTO cash_flow_category (code, chinese_name, direction, category_group) VALUES
+('rent', '租金', 'in', 'tenant'),
+('deposit_received', '押金', 'in', 'tenant'),
+('deposit_returned', '退押金', 'out', 'tenant'),
+('referral_fee', '介紹費', 'out', 'operation'),
+('tenant_electricity', '住戶電費', 'out', 'tenant'),
+('manager_salary', '管理員薪水', 'out', 'operation'),
+('manager_bonus', '管理員獎金', 'out', 'operation'),
+('maintenance', '維修費', 'out', 'operation'),
+('new_equipment', '新設備', 'out', 'operation'),
+('building_electricity', '大樓電費支出', 'out', 'operation'),
+('water', '水費', 'out', 'operation'),
+('tax', '稅', 'out', 'operation'),
+('internet', '網路費', 'out', 'operation'),
+('stationery', '文具', 'out', 'operation'),
+('daily_supply', '日常用品', 'out', 'operation'),
+('misc', '其他', 'out', 'operation'),
+('bank_transfer', '匯馬玲帳戶', 'transfer', 'operation'),
+('laundry_income', '洗烘衣機收入', 'in', 'operation'),
+('bank_fee', '匯費', 'out', 'operation');
+
+INSERT INTO cash_account (account_type, chinese_name, note) VALUES
+('bank', '銀行', 'reconciled monthly'),
+('cash', '現金', 'manual controls'),
+('clearing', '匯銀行', 'must settle to bank'),
+('deposit', '押金', 'restricted usage');
+
+
+
+
+
+
+
 
