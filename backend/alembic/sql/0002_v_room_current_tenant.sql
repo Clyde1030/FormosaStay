@@ -6,8 +6,18 @@
 -- - Tenant details (name, contact info)
 -- - Lease details (rent, deposit, dates, payment terms)
 -- - Tenant role (primary/secondary)
+-- 
+-- IMPORTANT: This view includes ALL rooms, even vacant ones.
+-- For vacant rooms, tenant-related columns (tenant_id, first_name, etc.)
+-- and lease-related columns (lease_id, monthly_rent, etc.) will be NULL,
+-- but room information (room_id, building_no, floor_no, room_no) will always be present.
+-- 
 -- Usage: Get current tenant for a room:
 -- SELECT * FROM v_room_current_tenant WHERE room_id = 17;
+-- 
+-- Usage: Look up room_id by building_no, floor_no, room_no:
+-- SELECT DISTINCT room_id FROM v_room_current_tenant 
+-- WHERE building_no = 1 AND floor_no = 2 AND room_no = 'A';
 
 CREATE OR REPLACE VIEW v_room_current_tenant AS
 SELECT 

@@ -66,10 +66,32 @@ export const fetchTenantsWithDetails = async (): Promise<TenantWithLease[]> => {
 // For now, returning empty arrays as placeholders
 
 export const getTransactions = async (): Promise<Transaction[]> => {
-    // TODO: Add /payments/ endpoint to backend
     try {
-        // Placeholder - will need backend endpoint
-        return [];
+        const data = await apiClient.get<any[]>('/payments/');
+        
+        return data.map(p => ({
+            id: p.invoice_id?.toString() || p.id?.toString() || '',
+            roomId: p.room_id,
+            tenantName: p.tenant_name || '',
+            contractId: p.lease_id,
+            type: p.category === '房租' ? 'Rent' : 
+                  p.category === '電費' ? 'Electricity' : 
+                  p.category === '罰款' ? 'Fee' : 
+                  p.category === '押金' ? 'Deposit' : 'Rent',
+            amount: Number(p.amount) || 0,
+            dueDate: p.due_date || '',
+            status: p.status === '已交' ? 'Paid' :
+                    p.status === '未交' ? 'Unpaid' :
+                    p.status === '部分未交' ? 'Unpaid' : 
+                    p.status === '呆帳' ? 'Overdue' : 'Unpaid',
+            paidDate: p.paid_date || (p.status === '已交' ? p.due_date : undefined),
+            method: p.payment_method === '銀行轉帳' ? 'Transfer' :
+                    p.payment_method === '現金' ? 'Cash' :
+                    p.payment_method === 'LINE Pay' ? 'LinePay' : undefined,
+            note: p.note,
+            periodStart: p.period_start || '',
+            periodEnd: p.period_end || ''
+        }));
     } catch (error) {
         console.error('Error fetching transactions:', error);
         return [];
@@ -231,18 +253,32 @@ export const getRoomElectricityHistory = async (roomId: any): Promise<any[]> => 
 };
 
 export const getExpenses = async (): Promise<Expense[]> => {
-    // TODO: Add /cash-flow/ endpoint to backend
     try {
-        return [];
+        const data = await apiClient.get<any[]>('/cash-flow/');
+        
+        // Filter for expenses (direction = '支出')
+        const expenses = data.filter(cf => cf.category_direction === '支出' || cf.direction === '支出');
+        
+        return expenses.map(cf => ({
+            id: cf.id?.toString() || '',
+            category: cf.category_name || cf.category_code || '',
+            amount: Number(cf.amount) || 0,
+            description: cf.note || '',
+            attachmentName: '', // Attachment handling would need separate endpoint
+            date: cf.flow_date || ''
+        }));
     } catch (error) {
         console.error('Error fetching expenses:', error);
         return [];
     }
 };
 
-export const getCashFlowCategories = async (): Promise<CashFlowCategory[]> => {
+export const getCashFlowCategories = async (description?: string): Promise<CashFlowCategory[]> => {
     try {
-        const data = await apiClient.get<CashFlowCategory[]>('/cash-flow/categories');
+        const url = description 
+            ? `/cash-flow/categories?description=${description}`
+            : '/cash-flow/categories';
+        const data = await apiClient.get<CashFlowCategory[]>(url);
         return data;
     } catch (error) {
         console.error('Error fetching cash flow categories:', error);
@@ -263,33 +299,242 @@ export const getElectricityRates = async (): Promise<ElectricityRate[]> => {
 // --- Operations ---
 
 export const addTransaction = async (tx: Partial<Transaction>) => {
-    // TODO: Add /payments/ endpoint to backend
-    throw new Error('Not implemented - backend endpoint needed');
+    try {
+        // Map frontend Transaction type to backend category
+        const categoryMap: { [key: string]: string } = {
+            'Rent': '房租',
+            'Electricity': '電費',
+            'Deposit': '押金',
+            'Fee': '罰款',
+            'MachineIncome': '房租' // Machine income will be handled separately
+        };
+        
+        // Handle MachineIncome separately (create cash flow only, no invoice)
+        if (tx.type === 'MachineIncome') {
+            // Get laundry income category
+            const categories = await getCashFlowCategories();
+            const laundryCategory = categories.find(c => c.code === 'laundry_income');
+            
+            if (!laundryCategory) {
+                throw new Error('Laundry income category not found');
+            }
+            
+            // Get or use default cash account (first one)
+            const cashAccounts = await apiClient.get<any[]>('/cash-flow/accounts').catch(() => []);
+            const cashAccountId = cashAccounts.length > 0 ? cashAccounts[0].id : 1;
+            
+            const cashFlowData = {
+                category_id: laundryCategory.id,
+                cash_account_id: cashAccountId,
+                flow_date: tx.dueDate || new Date().toISOString().split('T')[0],
+                amount: tx.amount || 0,
+                payment_method: '現金',
+                note: tx.description || 'Coin Laundry Collection'
+            };
+            
+            await apiClient.post('/cash-flow/', cashFlowData);
+            return;
+        }
+        
+        if (!tx.roomId) {
+            throw new Error('Room ID is required for payment transactions');
+        }
+        
+        // Map Transaction type to Invoice category (Chinese)
+        const invoiceCategoryMap: { [key: string]: string } = {
+            'Rent': '房租',
+            'Electricity': '電費',
+            'Deposit': '押金',
+            'Fee': '罰款'
+        };
+        
+        const paymentData: any = {
+            room_id: Number(tx.roomId),
+            category: invoiceCategoryMap[tx.type || 'Rent'] || '房租',
+            amount: tx.amount || 0,
+            due_date: tx.dueDate || new Date().toISOString().split('T')[0],
+            status: tx.status === 'Paid' ? '已交' : '未交',
+            period_start: tx.periodStart,
+            period_end: tx.periodEnd,
+            note: tx.note
+        };
+        
+        if (tx.contractId) {
+            paymentData.lease_id = tx.contractId;
+        }
+        
+        if (tx.status === 'Paid' && tx.paidDate) {
+            paymentData.paid_date = tx.paidDate;
+        }
+        
+        if (tx.method) {
+            const methodMap: { [key: string]: string } = {
+                'Transfer': '銀行轉帳',
+                'Cash': '現金',
+                'LinePay': 'LINE Pay',
+                'Other': '其他'
+            };
+            paymentData.payment_method = methodMap[tx.method] || '銀行轉帳';
+        }
+        
+        await apiClient.post('/payments/', paymentData);
+    } catch (error) {
+        console.error('Error adding transaction:', error);
+        throw error;
+    }
 };
 
 export const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
-    // TODO: Add PUT /payments/{id} endpoint to backend
-    throw new Error('Not implemented - backend endpoint needed');
+    try {
+        const updateData: any = {};
+        
+        if (updates.type) {
+            const categoryMap: { [key: string]: string } = {
+                'Rent': '房租',
+                'Electricity': '電費',
+                'Deposit': '押金',
+                'Fee': '罰款'
+            };
+            updateData.category = categoryMap[updates.type];
+        }
+        
+        if (updates.amount !== undefined) {
+            updateData.amount = updates.amount;
+        }
+        
+        if (updates.dueDate) {
+            updateData.due_date = updates.dueDate;
+        }
+        
+        if (updates.periodStart) {
+            updateData.period_start = updates.periodStart;
+        }
+        
+        if (updates.periodEnd) {
+            updateData.period_end = updates.periodEnd;
+        }
+        
+        if (updates.status) {
+            const statusMap: { [key: string]: string } = {
+                'Paid': '已交',
+                'Unpaid': '未交',
+                'Overdue': '呆帳'
+            };
+            updateData.status = statusMap[updates.status] || updates.status;
+        }
+        
+        if (updates.paidDate) {
+            updateData.paid_date = updates.paidDate;
+        }
+        
+        if (updates.method) {
+            const methodMap: { [key: string]: string } = {
+                'Transfer': '銀行轉帳',
+                'Cash': '現金',
+                'LinePay': 'LINE Pay',
+                'Other': '其他'
+            };
+            updateData.payment_method = methodMap[updates.method] || '銀行轉帳';
+        }
+        
+        if (updates.note !== undefined) {
+            updateData.note = updates.note;
+        }
+        
+        if (updates.readingEnd !== undefined) {
+            updateData.description = `Reading Adjusted to ${updates.readingEnd}`;
+        }
+        
+        await apiClient.put(`/payments/${id}`, updateData);
+    } catch (error) {
+        console.error('Error updating transaction:', error);
+        throw error;
+    }
 };
 
 export const deleteTransaction = async (id: string) => {
-    // TODO: Add DELETE /payments/{id} endpoint to backend
-    throw new Error('Not implemented - backend endpoint needed');
+    try {
+        await apiClient.delete(`/payments/${id}`);
+    } catch (error) {
+        console.error('Error deleting transaction:', error);
+        throw error;
+    }
 };
 
 export const addExpense = async (ex: Partial<Expense>) => {
-    // TODO: Add /cash-flow/ endpoint to backend
-    throw new Error('Not implemented - backend endpoint needed');
+    try {
+        // Get operation categories to find the category ID
+        const categories = await getCashFlowCategories('operation');
+        const category = categories.find(c => c.name === ex.category);
+        
+        if (!category) {
+            throw new Error(`Category "${ex.category}" not found in operation categories`);
+        }
+        
+        // Get or use default cash account (first one)
+        const cashAccounts = await apiClient.get<any[]>('/cash-flow/accounts').catch(() => []);
+        const cashAccountId = cashAccounts.length > 0 ? cashAccounts[0].id : 1;
+        
+        const cashFlowData: any = {
+            category_id: category.id,
+            cash_account_id: cashAccountId,
+            flow_date: ex.date || new Date().toISOString().split('T')[0],
+            amount: ex.amount || 0,
+            payment_method: '現金', // Default to cash
+            note: ex.description || ''
+        };
+        
+        // Handle attachment if provided
+        if (ex.attachmentName) {
+            // Note: File upload would need separate endpoint, for now just store the name
+            cashFlowData.note = (cashFlowData.note ? cashFlowData.note + '\n' : '') + `Attachment: ${ex.attachmentName}`;
+        }
+        
+        await apiClient.post('/cash-flow/', cashFlowData);
+    } catch (error) {
+        console.error('Error adding expense:', error);
+        throw error;
+    }
 };
 
 export const updateExpense = async (id: string, updates: Partial<Expense>) => {
-    // TODO: Add PUT /cash-flow/{id} endpoint to backend
-    throw new Error('Not implemented - backend endpoint needed');
+    try {
+        const updateData: any = {};
+        
+        if (updates.category) {
+            const categories = await getCashFlowCategories('operation');
+            const category = categories.find(c => c.name === updates.category);
+            if (category) {
+                updateData.category_id = category.id;
+            }
+        }
+        
+        if (updates.amount !== undefined) {
+            updateData.amount = updates.amount;
+        }
+        
+        if (updates.date) {
+            updateData.flow_date = updates.date;
+        }
+        
+        if (updates.description !== undefined) {
+            updateData.note = updates.description;
+        }
+        
+        await apiClient.put(`/cash-flow/${id}`, updateData);
+    } catch (error) {
+        console.error('Error updating expense:', error);
+        throw error;
+    }
 };
 
 export const deleteExpense = async (id: string) => {
-    // TODO: Add DELETE /cash-flow/{id} endpoint to backend
-    throw new Error('Not implemented - backend endpoint needed');
+    try {
+        await apiClient.delete(`/cash-flow/${id}`);
+    } catch (error) {
+        console.error('Error deleting expense:', error);
+        throw error;
+    }
 };
 
 export const addElectricityRate = async (rate: Partial<ElectricityRate>) => {

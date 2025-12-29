@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-from database.migration_utils import execute_sql_file
+from db_tools.migration_utils import execute_sql_file
 
 # revision identifiers, used by Alembic.
 revision: str = '0001_initial_schema'

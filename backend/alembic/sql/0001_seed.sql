@@ -105,26 +105,26 @@ WHERE b.building_no = 6 AND u.email = 'bboy80345@gmail.com';
 -- Cash Flow Categories
 -- =========================
 
-INSERT INTO cash_flow_category (code, name, direction) VALUES
-('rent', '租金', '收入'),
-('deposit_received', '押金', '收入'),
-('deposit_returned', '退押金', '支出'),
-('referral_fee', '介紹費', '支出'),
-('tenant_electricity', '住戶電費', '支出'),
-('manager_salary', '管理員薪水', '支出'),
-('manager_bonus', '管理員獎金', '支出'),
-('maintenance', '維修費', '支出'),
-('new_equipment', '新設備', '支出'),
-('building_electricity', '大樓電費支出', '支出'),
-('water', '水費', '支出'),
-('tax', '稅', '支出'),
-('internet', '網路費', '支出'),
-('stationery', '文具', '支出'),
-('daily_supply', '日常用品', '支出'),
-('misc', '其他', '支出'),
-('bank_transfer', '匯馬玲帳戶', '轉帳'),
-('laundry_income', '洗烘衣機收入', '收入'),
-('bank_fee', '匯費', '支出');
+INSERT INTO cash_flow_category (code, name, direction, description) VALUES
+('rent', '租金', '收入', 'tenant'),
+('deposit_received', '押金', '收入', 'tenant'),
+('deposit_returned', '退押金', '支出', 'tenant'),
+('referral_fee', '介紹費', '支出', 'operation'),
+('tenant_electricity', '住戶電費', '支出', 'tenant'),
+('manager_salary', '管理員薪水', '支出', 'operation'),
+('manager_bonus', '管理員獎金', '支出', 'operation'),
+('maintenance', '維修費', '支出', 'operation'),
+('new_equipment', '新設備', '支出', 'operation'),
+('building_electricity', '大樓電費支出', '支出', 'operation'),
+('water', '水費', '支出', 'operation'),
+('tax', '稅', '支出', 'operation'),
+('internet', '網路費', '支出', 'operation'),
+('stationery', '文具', '支出', 'operation'),
+('daily_supply', '日常用品', '支出', 'operation'),
+('misc', '其他', '支出', 'operation'),
+('bank_transfer', '匯馬玲帳戶', '轉帳', 'operation'),
+('laundry_income', '洗烘衣機收入', '收入', 'operation'),
+('bank_fee', '匯費', '支出', 'operation');
 
 -- =========================
 -- Tenants & Leases

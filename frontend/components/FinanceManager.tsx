@@ -277,7 +277,7 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
 
     useEffect(() => {
         const loadData = async () => {
-            const [exs, cats] = await Promise.all([getExpenses(), getCashFlowCategories()]);
+            const [exs, cats] = await Promise.all([getExpenses(), getCashFlowCategories('operation')]);
             setExpenses(exs);
             setCategories(cats);
         };
@@ -526,6 +526,7 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
     const [buildings, setBuildings] = useState<Building[]>([]);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [selectedBuilding, setSelectedBuilding] = useState<number | string>('');
+    const [paymentCategories, setPaymentCategories] = useState<CashFlowCategory[]>([]);
     
     // Form State
     const [roomId, setRoomId] = useState('');
@@ -548,6 +549,26 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
             if (bs.length > 0) setSelectedBuilding(bs[0].id);
         };
         loadBuildings();
+    }, []);
+
+    useEffect(() => {
+        const loadPaymentCategories = async () => {
+            const categories = await getCashFlowCategories('tenant');
+            setPaymentCategories(categories);
+            // Set default type to first category if available
+            if (categories.length > 0) {
+                const defaultCategory = categories.find(c => c.code === 'rent') || categories[0];
+                // Map category code to Transaction type
+                const typeMap: { [key: string]: string } = {
+                    'rent': 'Rent',
+                    'deposit_received': 'Deposit',
+                    'tenant_electricity': 'Electricity',
+                    'deposit_returned': 'Deposit'
+                };
+                setType(typeMap[defaultCategory.code] || 'Rent');
+            }
+        };
+        loadPaymentCategories();
     }, []);
 
     useEffect(() => {
@@ -656,16 +677,19 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
             }
         }
 
+        // Map Transaction type to ensure it's valid
+        const validType = type as 'Rent' | 'Deposit' | 'Electricity' | 'Fee';
+        
         await addTransaction({
             roomId: roomId,
             tenantName: tenantName, 
             contractId: contractId,
-            type: type as any,
+            type: validType,
             amount: Number(amount),
             dueDate: date,
             status: 'Paid',
             paidDate: date,
-            method: method as any,
+            method: method as 'Transfer' | 'Cash' | 'LinePay',
             note: finalNote,
             periodStart: type === 'Rent' ? periodStart : undefined,
             periodEnd: finalPeriodEnd
@@ -701,10 +725,19 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
                          <div>
                             <label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Type</label>
                             <select className="w-full border p-2 rounded text-sm" value={type} onChange={e => setType(e.target.value)}>
-                                <option value="Rent">Rent</option>
-                                <option value="Deposit">Deposit</option>
-                                <option value="Electricity">Electricity</option>
-                                <option value="Fee">Other Fee</option>
+                                {paymentCategories.map(cat => {
+                                    // Map category code to Transaction type
+                                    const typeMap: { [key: string]: string } = {
+                                        'rent': 'Rent',
+                                        'deposit_received': 'Deposit',
+                                        'tenant_electricity': 'Electricity',
+                                        'deposit_returned': 'Deposit'
+                                    };
+                                    const mappedType = typeMap[cat.code] || 'Rent';
+                                    return (
+                                        <option key={cat.id} value={mappedType}>{cat.name}</option>
+                                    );
+                                })}
                             </select>
                         </div>
                         <div>
