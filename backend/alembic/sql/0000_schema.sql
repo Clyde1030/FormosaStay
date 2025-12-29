@@ -170,20 +170,6 @@ CREATE TABLE lease (
     CONSTRAINT chk_monthly_rent CHECK (monthly_rent >= 0),
     CONSTRAINT chk_deposit CHECK (deposit >= 0),
     CONSTRAINT chk_pay_rent_on CHECK (pay_rent_on BETWEEN 1 AND 31),
-    CONSTRAINT chk_lease_assets_structure
-        CHECK (
-            assets IS NULL 
-            OR (
-                jsonb_typeof(assets) = 'array'
-                AND (
-                    SELECT bool_and(
-                        elem->>'type' IN ('鑰匙', '磁扣', '遙控器')
-                        AND (elem->>'quantity')::integer >= 1
-                    )
-                    FROM jsonb_array_elements(assets) AS elem
-                )
-            )
-        ),
     CONSTRAINT fk_lease_created_by
         FOREIGN KEY (created_by) REFERENCES user_account(id),
     CONSTRAINT fk_lease_updated_by
@@ -379,7 +365,11 @@ CREATE TABLE cash_flow (
             (room_id IS NULL AND building_id IS NULL)
             OR
             (room_id IS NOT NULL AND building_id IS NOT NULL)
-        )
+        ),
+    CONSTRAINT fk_cf_created_by
+        FOREIGN KEY (created_by) REFERENCES user_account(id),
+    CONSTRAINT fk_cf_updated_by
+        FOREIGN KEY (updated_by) REFERENCES user_account(id)
 );
 
 CREATE INDEX idx_cf_date ON cash_flow(flow_date);
@@ -524,6 +514,39 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION validate_lease_assets()
+RETURNS trigger AS $$
+DECLARE
+    elem JSONB;
+BEGIN
+    -- If assets is NULL (SQL NULL) or JSON null, it's valid
+    IF NEW.assets IS NULL OR jsonb_typeof(NEW.assets) = 'null' THEN
+        RETURN NEW;
+    END IF;
+    
+    -- Check that assets is an array
+    IF jsonb_typeof(NEW.assets) != 'array' THEN
+        RAISE EXCEPTION 'assets must be a JSON array or null, got: %', jsonb_typeof(NEW.assets);
+    END IF;
+    
+    -- Validate each element in the array
+    FOR elem IN SELECT * FROM jsonb_array_elements(NEW.assets)
+    LOOP
+        -- Check that type is one of the allowed values
+        IF elem->>'type' NOT IN ('鑰匙', '磁扣', '遙控器') THEN
+            RAISE EXCEPTION 'Invalid asset type: %. Allowed types are: 鑰匙, 磁扣, 遙控器', elem->>'type';
+        END IF;
+        
+        -- Check that quantity is a positive integer
+        IF (elem->>'quantity')::integer < 1 THEN
+            RAISE EXCEPTION 'Asset quantity must be at least 1, got: %', elem->>'quantity';
+        END IF;
+    END LOOP;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER trg_cf_room_building
 BEFORE INSERT OR UPDATE ON cash_flow
 FOR EACH ROW
@@ -543,6 +566,11 @@ CREATE TRIGGER trg_lease_no_deleted_room
 BEFORE INSERT OR UPDATE ON lease
 FOR EACH ROW
 EXECUTE FUNCTION prevent_deleted_room();
+
+CREATE TRIGGER trg_lease_validate_assets
+BEFORE INSERT OR UPDATE ON lease
+FOR EACH ROW
+EXECUTE FUNCTION validate_lease_assets();
 
 CREATE TRIGGER trg_lease_tenant_no_deleted_tenant
 BEFORE INSERT OR UPDATE ON lease_tenant

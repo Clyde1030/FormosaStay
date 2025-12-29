@@ -188,3 +188,8 @@ When moving this logic to the backend:
 5. **Performance**: Consider caching for frequently accessed rates and calculations
 6. **Audit Trail**: Log all financial calculations for audit purposes
 
+# TO DO LIST:
+- Add logic for room change
+- Add logic for rent and electricity rate change
+- Add field to label new contract, renew
+- Add refresh after entering info, so that tenant and room dashboard, reflect changes.
