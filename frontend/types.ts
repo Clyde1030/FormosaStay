@@ -164,11 +164,22 @@ export interface Transaction {
 // Added for FinanceManager
 export interface Expense {
     id: string;
-    category: 'Maintenance' | 'Cleaning' | 'Utilities' | 'Payroll' | 'Tax' | 'Misc' | any;
+    category: string; // Category name from cash_flow_category table
     amount: number;
     description: string;
     attachmentName?: string;
     date: string;
+    cash_account_id?: number;
+    building_id?: number;
+    room_id?: number;
+    payment_method?: '現金' | '銀行轉帳' | 'LINE Pay' | '其他';
+}
+
+export interface CashAccount {
+    id: number;
+    name: string;
+    account_type: '現金' | '銀行' | '第三方支付';
+    note?: string;
 }
 
 export interface CashFlow {

@@ -4,7 +4,7 @@ import {
     TenantWithLease, Invoice, CashFlow, 
     ElectricityRate, MeterReading, Transaction, Expense,
     TenantWithContract, Contract, PaymentFrequency, DepositStatus,
-    CashFlowCategory
+    CashFlowCategory, CashAccount
 } from '../types';
 
 // --- Data Fetching ---
@@ -265,7 +265,11 @@ export const getExpenses = async (): Promise<Expense[]> => {
             amount: Number(cf.amount) || 0,
             description: cf.note || '',
             attachmentName: '', // Attachment handling would need separate endpoint
-            date: cf.flow_date || ''
+            date: cf.flow_date || '',
+            cash_account_id: cf.cash_account_id,
+            building_id: cf.building_id,
+            room_id: cf.room_id,
+            payment_method: cf.payment_method
         }));
     } catch (error) {
         console.error('Error fetching expenses:', error);
@@ -282,6 +286,21 @@ export const getCashFlowCategories = async (description?: string): Promise<CashF
         return data;
     } catch (error) {
         console.error('Error fetching cash flow categories:', error);
+        return [];
+    }
+};
+
+export const getCashAccounts = async (): Promise<CashAccount[]> => {
+    try {
+        const data = await apiClient.get<any[]>('/cash-flow/accounts');
+        return data.map(acc => ({
+            id: acc.id,
+            name: acc.name,
+            account_type: acc.account_type,
+            note: acc.note
+        }));
+    } catch (error) {
+        console.error('Error fetching cash accounts:', error);
         return [];
     }
 };
@@ -471,18 +490,29 @@ export const addExpense = async (ex: Partial<Expense>) => {
             throw new Error(`Category "${ex.category}" not found in operation categories`);
         }
         
-        // Get or use default cash account (first one)
-        const cashAccounts = await apiClient.get<any[]>('/cash-flow/accounts').catch(() => []);
-        const cashAccountId = cashAccounts.length > 0 ? cashAccounts[0].id : 1;
+        // Use provided cash_account_id or get default
+        let cashAccountId = ex.cash_account_id;
+        if (!cashAccountId) {
+            const cashAccounts = await apiClient.get<any[]>('/cash-flow/accounts').catch(() => []);
+            cashAccountId = cashAccounts.length > 0 ? cashAccounts[0].id : 1;
+        }
         
         const cashFlowData: any = {
             category_id: category.id,
             cash_account_id: cashAccountId,
             flow_date: ex.date || new Date().toISOString().split('T')[0],
             amount: ex.amount || 0,
-            payment_method: '現金', // Default to cash
+            payment_method: ex.payment_method || '現金', // Use provided or default to cash
             note: ex.description || ''
         };
+        
+        // Add building_id and room_id if provided
+        if (ex.building_id) {
+            cashFlowData.building_id = ex.building_id;
+        }
+        if (ex.room_id) {
+            cashFlowData.room_id = ex.room_id;
+        }
         
         // Handle attachment if provided
         if (ex.attachmentName) {
@@ -507,6 +537,22 @@ export const updateExpense = async (id: string, updates: Partial<Expense>) => {
             if (category) {
                 updateData.category_id = category.id;
             }
+        }
+        
+        if (updates.cash_account_id !== undefined) {
+            updateData.cash_account_id = updates.cash_account_id;
+        }
+        
+        if (updates.building_id !== undefined) {
+            updateData.building_id = updates.building_id;
+        }
+        
+        if (updates.room_id !== undefined) {
+            updateData.room_id = updates.room_id;
+        }
+        
+        if (updates.payment_method !== undefined) {
+            updateData.payment_method = updates.payment_method;
         }
         
         if (updates.amount !== undefined) {

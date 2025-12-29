@@ -7,10 +7,10 @@ import {
     addTransaction, updateTransaction, deleteTransaction, 
     addExpense, updateExpense, deleteExpense,
     recordMeterReading, getElectricityRates, addElectricityRate, deleteElectricityRate, getCurrentElectricityRate,
-    getTransactionsByRoom, getCashFlowCategories,
+    getTransactionsByRoom, getCashFlowCategories, getCashAccounts,
     calculateRentAmount, calculatePeriodEnd, formatRentNote
 } from '../services/propertyService';
-import { Transaction, Expense, Room, Building, Tenant, ElectricityRate, CashFlowCategory } from '../types';
+import { Transaction, Expense, Room, Building, Tenant, ElectricityRate, CashFlowCategory, CashAccount } from '../types';
 
 const FinanceManager: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'payments' | 'electricity' | 'expenses' | 'machines'>('payments');
@@ -271,18 +271,52 @@ const ElectricityTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
 const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [categories, setCategories] = useState<CashFlowCategory[]>([]);
+    const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
+    const [buildings, setBuildings] = useState<Building[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [expenseForm, setExpenseForm] = useState({ category: '', amount: '', description: '', attachmentName: '', date: '' });
+    const [expenseForm, setExpenseForm] = useState({ 
+        category: '', 
+        amount: '', 
+        description: '', 
+        attachmentName: '', 
+        date: '',
+        cash_account_id: '',
+        building_id: '',
+        floor_no: '',
+        room_id: '',
+        payment_method: '現金'
+    });
 
     useEffect(() => {
         const loadData = async () => {
-            const [exs, cats] = await Promise.all([getExpenses(), getCashFlowCategories('operation')]);
+            const [exs, cats, accounts, bs] = await Promise.all([
+                getExpenses(), 
+                getCashFlowCategories('operation'),
+                getCashAccounts(),
+                getBuildings()
+            ]);
             setExpenses(exs);
             setCategories(cats);
+            setCashAccounts(accounts);
+            setBuildings(bs);
         };
         loadData();
     }, []);
+
+    // Load rooms when building is selected
+    useEffect(() => {
+        const loadRooms = async () => {
+            if (expenseForm.building_id) {
+                const rs = await getRooms(Number(expenseForm.building_id));
+                setRooms(rs);
+            } else {
+                setRooms([]);
+            }
+        };
+        loadRooms();
+    }, [expenseForm.building_id]);
 
     // Set default category when categories are loaded
     useEffect(() => {
@@ -297,28 +331,66 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
         }
     }, [categories]);
 
+    // Set default cash account when accounts are loaded
+    useEffect(() => {
+        if (cashAccounts.length > 0) {
+            setExpenseForm(prev => {
+                // Only set if cash_account_id is empty
+                if (!prev.cash_account_id) {
+                    return { ...prev, cash_account_id: cashAccounts[0].id.toString() };
+                }
+                return prev;
+            });
+        }
+    }, [cashAccounts]);
+
     const resetForm = () => {
         const defaultCategory = categories.length > 0 ? categories[0].name : '';
-        setExpenseForm({ category: defaultCategory, amount: '', description: '', attachmentName: '', date: new Date().toISOString().split('T')[0] });
+        const defaultCashAccount = cashAccounts.length > 0 ? cashAccounts[0].id.toString() : '';
+        setExpenseForm({ 
+            category: defaultCategory, 
+            amount: '', 
+            description: '', 
+            attachmentName: '', 
+            date: new Date().toISOString().split('T')[0],
+            cash_account_id: defaultCashAccount,
+            building_id: '',
+            floor_no: '',
+            room_id: '',
+            payment_method: '現金'
+        });
     };
 
+    // Get available floors for selected building
+    const availableFloors = Array.from(new Set(
+        rooms.filter(r => !expenseForm.building_id || r.building_id === Number(expenseForm.building_id))
+            .map(r => r.floor_no)
+    )).sort((a: number, b: number) => a - b);
+
+    // Get available rooms for selected building and floor
+    const availableRooms = rooms.filter(r => {
+        if (expenseForm.building_id && r.building_id !== Number(expenseForm.building_id)) return false;
+        if (expenseForm.floor_no && r.floor_no !== Number(expenseForm.floor_no)) return false;
+        return true;
+    });
+
     const handleSave = async () => {
+        const expenseData: Partial<Expense> = {
+            category: expenseForm.category,
+            amount: Number(expenseForm.amount),
+            description: expenseForm.description,
+            attachmentName: expenseForm.attachmentName,
+            date: expenseForm.date,
+            cash_account_id: expenseForm.cash_account_id ? Number(expenseForm.cash_account_id) : undefined,
+            building_id: expenseForm.building_id ? Number(expenseForm.building_id) : undefined,
+            room_id: expenseForm.room_id ? Number(expenseForm.room_id) : undefined,
+            payment_method: expenseForm.payment_method as '現金' | '銀行轉帳' | 'LINE Pay' | '其他'
+        };
+
         if (editingId) {
-            await updateExpense(editingId, {
-                category: expenseForm.category as any,
-                amount: Number(expenseForm.amount),
-                description: expenseForm.description,
-                attachmentName: expenseForm.attachmentName,
-                date: expenseForm.date
-            });
+            await updateExpense(editingId, expenseData);
         } else {
-            await addExpense({
-                category: expenseForm.category as any,
-                amount: Number(expenseForm.amount),
-                description: expenseForm.description,
-                attachmentName: expenseForm.attachmentName,
-                date: expenseForm.date
-            });
+            await addExpense(expenseData);
         }
         setIsAdding(false);
         setEditingId(null);
@@ -328,15 +400,42 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
         onRefresh();
     };
 
-    const startEdit = (ex: Expense) => {
+    const startEdit = async (ex: Expense) => {
         setEditingId(ex.id);
-        setExpenseForm({
-            category: ex.category,
-            amount: String(ex.amount),
-            description: ex.description,
-            attachmentName: ex.attachmentName || '',
-            date: ex.date
-        });
+        
+        // Load rooms if building_id exists
+        if (ex.building_id) {
+            const rs = await getRooms(ex.building_id);
+            setRooms(rs);
+            
+            // Find the room to get floor_no
+            const room = ex.room_id ? rs.find(r => r.id === ex.room_id) : null;
+            setExpenseForm({
+                category: ex.category,
+                amount: String(ex.amount),
+                description: ex.description,
+                attachmentName: ex.attachmentName || '',
+                date: ex.date,
+                cash_account_id: ex.cash_account_id?.toString() || '',
+                building_id: ex.building_id.toString(),
+                floor_no: room?.floor_no?.toString() || '',
+                room_id: ex.room_id?.toString() || '',
+                payment_method: ex.payment_method || '現金'
+            });
+        } else {
+            setExpenseForm({
+                category: ex.category,
+                amount: String(ex.amount),
+                description: ex.description,
+                attachmentName: ex.attachmentName || '',
+                date: ex.date,
+                cash_account_id: ex.cash_account_id?.toString() || '',
+                building_id: '',
+                floor_no: '',
+                room_id: '',
+                payment_method: ex.payment_method || '現金'
+            });
+        }
         setIsAdding(true);
     };
 
@@ -390,6 +489,87 @@ const ExpensesTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
                                 >
                                     {categories.map(cat => (
                                         <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500">Payment Method (Cash Account)</label>
+                                <select 
+                                    className="w-full border border-slate-300 rounded p-2"
+                                    value={expenseForm.cash_account_id}
+                                    onChange={(e) => setExpenseForm({...expenseForm, cash_account_id: e.target.value})}
+                                >
+                                    {cashAccounts.map(acc => (
+                                        <option key={acc.id} value={acc.id.toString()}>
+                                            {acc.name} ({acc.account_type})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500">Payment Method Type</label>
+                                <select 
+                                    className="w-full border border-slate-300 rounded p-2"
+                                    value={expenseForm.payment_method}
+                                    onChange={(e) => setExpenseForm({...expenseForm, payment_method: e.target.value})}
+                                >
+                                    <option value="現金">現金</option>
+                                    <option value="銀行轉帳">銀行轉帳</option>
+                                    <option value="LINE Pay">LINE Pay</option>
+                                    <option value="其他">其他</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500">Building</label>
+                                <select 
+                                    className="w-full border border-slate-300 rounded p-2"
+                                    value={expenseForm.building_id}
+                                    onChange={(e) => {
+                                        setExpenseForm({
+                                            ...expenseForm, 
+                                            building_id: e.target.value,
+                                            floor_no: '',
+                                            room_id: ''
+                                        });
+                                    }}
+                                >
+                                    <option value="">None</option>
+                                    {buildings.map(b => (
+                                        <option key={b.id} value={b.id.toString()}>Building {b.building_no}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500">Floor</label>
+                                <select 
+                                    className="w-full border border-slate-300 rounded p-2"
+                                    value={expenseForm.floor_no}
+                                    onChange={(e) => {
+                                        setExpenseForm({
+                                            ...expenseForm, 
+                                            floor_no: e.target.value,
+                                            room_id: ''
+                                        });
+                                    }}
+                                    disabled={!expenseForm.building_id}
+                                >
+                                    <option value="">None</option>
+                                    {availableFloors.map(floor => (
+                                        <option key={floor} value={floor.toString()}>Floor {floor}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500">Room</label>
+                                <select 
+                                    className="w-full border border-slate-300 rounded p-2"
+                                    value={expenseForm.room_id}
+                                    onChange={(e) => setExpenseForm({...expenseForm, room_id: e.target.value})}
+                                    disabled={!expenseForm.floor_no}
+                                >
+                                    <option value="">None</option>
+                                    {availableRooms.map(room => (
+                                        <option key={room.id} value={room.id.toString()}>Room {room.roomNumber}</option>
                                     ))}
                                 </select>
                             </div>
