@@ -1,11 +1,11 @@
-# app/services/payment_service.py
+# app/services/invoice_service.py
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
 
-class PaymentService:
-    """Service for payment and rent calculations"""
+class InvoiceService:
+    """Service for invoice and rent calculations"""
 
     @staticmethod
     def calculate_rent_amount(

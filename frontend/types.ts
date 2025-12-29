@@ -119,22 +119,27 @@ export interface TenantWithContract extends TenantWithLease {
 
 // --- Finance Types ---
 
-// Payment category - using Chinese values to match database
-export type PaymentCategory = '房租' | '電費' | '罰款' | '押金';
-// Payment status - using Chinese values to match database
-export type PaymentStatus = '未交' | '已交' | '部分未交' | '呆帳' | '歸還' | '取消';
+// Invoice category - using Chinese values to match database
+export type InvoiceCategory = '房租' | '電費' | '罰款' | '押金';
+// Invoice status - using Chinese values to match database
+export type InvoiceStatus = '未交' | '已交' | '部分未交' | '呆帳' | '歸還' | '取消';
 
-export interface Payment {
+export interface Invoice {
     id: number;
     lease_id: number;
-    category: PaymentCategory;
+    category: InvoiceCategory;
     period_start: string;
     period_end: string;
     due_amount: number;
     paid_amount: number;
-    status: PaymentStatus;
+    status: InvoiceStatus;
     created_at?: string;
 }
+
+// Deprecated: Use Invoice instead
+export type PaymentCategory = InvoiceCategory;
+export type PaymentStatus = InvoiceStatus;
+export interface Payment extends Invoice {}
 
 // Added for FinanceManager
 export interface Transaction {

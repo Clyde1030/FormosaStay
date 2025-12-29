@@ -225,16 +225,16 @@ async def get_room_tenants(room_id: int, db: AsyncSession = Depends(get_db)):
         raise
 
 
-@router.get("/{room_id}/payments")
-async def get_room_payments(
+@router.get("/{room_id}/invoices")
+async def get_room_invoices(
     room_id: int,
     category: Optional[str] = Query(None, description="Filter by category (房租, 電費, 罰款, 押金)"),
-    status_filter: Optional[str] = Query(None, description="Filter by payment status"),
+    status_filter: Optional[str] = Query(None, description="Filter by invoice status"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get payment history for a room"""
+    """Get invoice history for a room"""
     try:
         query = "SELECT * FROM v_room_payment_history WHERE room_id = :room_id"
         params = {"room_id": room_id}

@@ -1,7 +1,7 @@
 import { apiClient } from './apiClient';
 import { 
     Building, Room, Tenant, Lease, LeaseStatus, 
-    TenantWithLease, Payment, CashFlow, 
+    TenantWithLease, Invoice, CashFlow, 
     ElectricityRate, MeterReading, Transaction, Expense,
     TenantWithContract, Contract, PaymentFrequency, DepositStatus,
     CashFlowCategory
@@ -67,7 +67,7 @@ export const fetchTenantsWithDetails = async (): Promise<TenantWithLease[]> => {
 
 export const getTransactions = async (): Promise<Transaction[]> => {
     try {
-        const data = await apiClient.get<any[]>('/payments/');
+        const data = await apiClient.get<any[]>('/invoices/');
         
         return data.map(p => ({
             id: p.invoice_id?.toString() || p.id?.toString() || '',
@@ -100,9 +100,9 @@ export const getTransactions = async (): Promise<Transaction[]> => {
 
 export const getTransactionsByRoom = async (roomId: any): Promise<Transaction[]> => {
     try {
-        const payments = await apiClient.get<any[]>(`/rooms/${roomId}/payments`);
+        const invoices = await apiClient.get<any[]>(`/rooms/${roomId}/invoices`);
         
-        return payments.map(p => ({
+        return invoices.map(p => ({
             id: p.invoice_id?.toString() || '',
             roomId: roomId,
             tenantName: p.tenant_name || '',
@@ -377,7 +377,7 @@ export const addTransaction = async (tx: Partial<Transaction>) => {
             paymentData.payment_method = methodMap[tx.method] || '銀行轉帳';
         }
         
-        await apiClient.post('/payments/', paymentData);
+        await apiClient.post('/invoices/', paymentData);
     } catch (error) {
         console.error('Error adding transaction:', error);
         throw error;
@@ -445,7 +445,7 @@ export const updateTransaction = async (id: string, updates: Partial<Transaction
             updateData.description = `Reading Adjusted to ${updates.readingEnd}`;
         }
         
-        await apiClient.put(`/payments/${id}`, updateData);
+        await apiClient.put(`/invoices/${id}`, updateData);
     } catch (error) {
         console.error('Error updating transaction:', error);
         throw error;
@@ -454,7 +454,7 @@ export const updateTransaction = async (id: string, updates: Partial<Transaction
 
 export const deleteTransaction = async (id: string) => {
     try {
-        await apiClient.delete(`/payments/${id}`);
+        await apiClient.delete(`/invoices/${id}`);
     } catch (error) {
         console.error('Error deleting transaction:', error);
         throw error;
@@ -594,8 +594,8 @@ export const recordMeterReading = async (roomId: any, read_amount: number, read_
     }
 };
 
-export const addPayment = async (payment: Omit<Payment, 'id'>) => {
-    // TODO: Add /payments/ endpoint to backend
+export const addPayment = async (invoice: Omit<Invoice, 'id'>) => {
+    // TODO: Add /invoices/ endpoint to backend (or use addTransaction)
     throw new Error('Not implemented - backend endpoint needed');
 };
 
@@ -645,7 +645,7 @@ export interface RentNoteResponse {
 
 export const calculateRentAmount = async (request: RentCalculationRequest): Promise<RentCalculationResponse> => {
     try {
-        const response = await apiClient.post<RentCalculationResponse>('/payments/calculate-rent', {
+        const response = await apiClient.post<RentCalculationResponse>('/invoices/calculate-rent', {
             monthly_rent: request.monthly_rent,
             payment_term_months: request.payment_term_months,
             discount: request.discount
@@ -659,7 +659,7 @@ export const calculateRentAmount = async (request: RentCalculationRequest): Prom
 
 export const calculatePeriodEnd = async (request: PeriodEndCalculationRequest): Promise<PeriodEndCalculationResponse> => {
     try {
-        const response = await apiClient.post<PeriodEndCalculationResponse>('/payments/calculate-period-end', {
+        const response = await apiClient.post<PeriodEndCalculationResponse>('/invoices/calculate-period-end', {
             period_start: request.period_start,
             payment_term_months: request.payment_term_months
         });
@@ -672,7 +672,7 @@ export const calculatePeriodEnd = async (request: PeriodEndCalculationRequest): 
 
 export const formatRentNote = async (request: RentNoteRequest): Promise<RentNoteResponse> => {
     try {
-        const response = await apiClient.post<RentNoteResponse>('/payments/format-rent-note', {
+        const response = await apiClient.post<RentNoteResponse>('/invoices/format-rent-note', {
             base_note: request.base_note || undefined,
             discount: request.discount
         });

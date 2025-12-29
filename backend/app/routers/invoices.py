@@ -1,4 +1,4 @@
-# app/routers/payments.py
+# app/routers/invoices.py
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -12,20 +12,20 @@ from app.models.room import Room
 from app.models.tenant import Tenant
 from app.models.lease import LeaseTenant
 from app.models.cash_flow import CashFlow, CashFlowCategory, CashAccount
-from app.schemas.payment import (
+from app.schemas.invoice import (
     RentCalculationRequest,
     RentCalculationResponse,
     PeriodEndCalculationRequest,
     PeriodEndCalculationResponse,
     RentNoteRequest,
     RentNoteResponse,
-    PaymentTransactionCreate,
-    PaymentTransactionUpdate,
-    PaymentTransactionResponse
+    InvoiceTransactionCreate,
+    InvoiceTransactionUpdate,
+    InvoiceTransactionResponse
 )
-from app.services.payment_service import PaymentService
+from app.services.invoice_service import InvoiceService
 
-router = APIRouter(prefix="/payments", tags=["Payments"])
+router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
 
 @router.post("/calculate-rent", response_model=RentCalculationResponse)
@@ -38,7 +38,7 @@ async def calculate_rent_amount(request: RentCalculationRequest):
     - Final amount cannot be negative (returns 0 if discount exceeds total)
     """
     try:
-        total_amount = PaymentService.calculate_rent_amount(
+        total_amount = InvoiceService.calculate_rent_amount(
             monthly_rent=request.monthly_rent,
             payment_term_months=request.payment_term_months,
             discount=request.discount
@@ -73,7 +73,7 @@ async def calculate_period_end(request: PeriodEndCalculationRequest):
     - Example: If start is 2024-01-01 and term is 1 month, end is 2024-01-31
     """
     try:
-        period_end = PaymentService.calculate_period_end(
+        period_end = InvoiceService.calculate_period_end(
             period_start=request.period_start,
             payment_term_months=request.payment_term_months
         )
@@ -103,7 +103,7 @@ async def format_rent_note(request: RentNoteRequest):
     - Returns base_note as-is if discount is 0
     """
     try:
-        formatted_note = PaymentService.format_rent_note(
+        formatted_note = InvoiceService.format_rent_note(
             base_note=request.base_note,
             discount=request.discount
         )
@@ -147,33 +147,31 @@ def map_category_to_invoice_category(category: str) -> str:
 
 
 
-
-
-@router.post("/", response_model=PaymentTransactionResponse)
-async def create_payment_transaction(
-    payment: PaymentTransactionCreate,
+@router.post("/", response_model=InvoiceTransactionResponse)
+async def create_invoice_transaction(
+    invoice: InvoiceTransactionCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a payment transaction (rent, electricity, deposit, fee)"""
+    """Create an invoice transaction (rent, electricity, deposit, fee)"""
     try:
         # Get or infer lease_id
-        lease_id = payment.lease_id
+        lease_id = invoice.lease_id
         if not lease_id:
             # Get active lease for the room
             room_result = await db.execute(
-                select(Room).where(Room.id == payment.room_id)
+                select(Room).where(Room.id == invoice.room_id)
             )
             room = room_result.scalar_one_or_none()
             if not room:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Room with id {payment.room_id} not found"
+                    detail=f"Room with id {invoice.room_id} not found"
                 )
             
             # Get active lease for this room
             lease_result = await db.execute(
                 select(Lease).where(
-                    Lease.room_id == payment.room_id,
+                    Lease.room_id == invoice.room_id,
                     Lease.early_termination_date.is_(None)
                 ).order_by(Lease.start_date.desc())
             )
@@ -181,7 +179,7 @@ async def create_payment_transaction(
             if not lease:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No active lease found for room {payment.room_id}"
+                    detail=f"No active lease found for room {invoice.room_id}"
                 )
             lease_id = lease.id
         
@@ -209,22 +207,22 @@ async def create_payment_transaction(
         tenant_name = f"{tenant_data[0].last_name}{tenant_data[0].first_name}" if tenant_data else "Unknown"
         
         # Set period dates - use provided or default to due_date
-        period_start = payment.period_start or payment.due_date
-        period_end = payment.period_end or payment.due_date
+        period_start = invoice.period_start or invoice.due_date
+        period_end = invoice.period_end or invoice.due_date
         
         # Create invoice
-        invoice = Invoice(
+        invoice_obj = Invoice(
             lease_id=lease_id,
-            category=payment.category,
+            category=invoice.category,
             period_start=period_start,
             period_end=period_end,
-            due_date=payment.due_date,
-            due_amount=payment.amount,
-            paid_amount=payment.amount if payment.status == "已交" else 0,
-            status=payment.status
+            due_date=invoice.due_date,
+            due_amount=invoice.amount,
+            paid_amount=invoice.amount if invoice.status == "已交" else 0,
+            status=invoice.status
         )
         
-        db.add(invoice)
+        db.add(invoice_obj)
         await db.flush()
         
         # Create cash flow entry
@@ -235,7 +233,7 @@ async def create_payment_transaction(
             '押金': 'deposit_received',
             '罰款': 'misc'
         }
-        category_code = invoice_to_cf_category_map.get(payment.category, 'rent')
+        category_code = invoice_to_cf_category_map.get(invoice.category, 'rent')
         category_result = await db.execute(
             select(CashFlowCategory).where(CashFlowCategory.code == category_code)
         )
@@ -248,11 +246,11 @@ async def create_payment_transaction(
             )
         
         # Get or create default cash account
-        cash_account_id = payment.cash_account_id or await get_or_create_default_cash_account(db)
+        cash_account_id = invoice.cash_account_id or await get_or_create_default_cash_account(db)
         
         # Get room for building_id
         room_result = await db.execute(
-            select(Room).where(Room.id == payment.room_id)
+            select(Room).where(Room.id == invoice.room_id)
         )
         room = room_result.scalar_one()
         
@@ -267,7 +265,7 @@ async def create_payment_transaction(
             '其他': '其他',
             'Other': '其他'
         }
-        backend_payment_method = payment_method_map.get(payment.payment_method or "Transfer", '銀行轉帳')
+        backend_payment_method = payment_method_map.get(invoice.payment_method or "Transfer", '銀行轉帳')
         
         # Create cash flow
         cash_flow = CashFlow(
@@ -275,33 +273,33 @@ async def create_payment_transaction(
             cash_account_id=cash_account_id,
             lease_id=lease_id,
             building_id=room.building_id,
-            room_id=payment.room_id,
-            invoice_id=invoice.id,
-            flow_date=payment.paid_date or payment.due_date,
-            amount=payment.amount,
+            room_id=invoice.room_id,
+            invoice_id=invoice_obj.id,
+            flow_date=invoice.paid_date or invoice.due_date,
+            amount=invoice.amount,
             payment_method=backend_payment_method,
-            note=payment.note
+            note=invoice.note
         )
         
         db.add(cash_flow)
         await db.commit()
-        await db.refresh(invoice)
+        await db.refresh(invoice_obj)
         
-        return PaymentTransactionResponse(
-            id=invoice.id,
-            invoice_id=invoice.id,
-            room_id=payment.room_id,
+        return InvoiceTransactionResponse(
+            id=invoice_obj.id,
+            invoice_id=invoice_obj.id,
+            room_id=invoice.room_id,
             lease_id=lease_id,
             tenant_name=tenant_name,
-            category=payment.category,
-            amount=payment.amount,
-            due_date=payment.due_date,
+            category=invoice.category,
+            amount=invoice.amount,
+            due_date=invoice.due_date,
             period_start=period_start,
             period_end=period_end,
-            status=payment.status,
-            paid_date=payment.paid_date,
-            payment_method=payment.payment_method,
-            note=payment.note
+            status=invoice.status,
+            paid_date=invoice.paid_date,
+            payment_method=invoice.payment_method,
+            note=invoice.note
         )
     except HTTPException:
         raise
@@ -309,15 +307,15 @@ async def create_payment_transaction(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating payment transaction: {str(e)}"
+            detail=f"Error creating invoice transaction: {str(e)}"
         ) from e
 
 
-@router.get("/", response_model=List[PaymentTransactionResponse])
-async def list_payment_transactions(
+@router.get("/", response_model=List[InvoiceTransactionResponse])
+async def list_invoice_transactions(
     db: AsyncSession = Depends(get_db)
 ):
-    """List all payment transactions"""
+    """List all invoice transactions"""
     try:
         result = await db.execute(
             select(Invoice, Lease, Room, Tenant, LeaseTenant)
@@ -331,7 +329,7 @@ async def list_payment_transactions(
         transactions = result.all()
         
         return [
-            PaymentTransactionResponse(
+            InvoiceTransactionResponse(
                 id=inv.id,
                 invoice_id=inv.id,
                 room_id=lease.room_id,
@@ -352,47 +350,47 @@ async def list_payment_transactions(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching payment transactions: {str(e)}"
+            detail=f"Error fetching invoice transactions: {str(e)}"
         ) from e
 
 
-@router.put("/{payment_id}", response_model=PaymentTransactionResponse)
-async def update_payment_transaction(
-    payment_id: int,
-    payment_update: PaymentTransactionUpdate,
+@router.put("/{invoice_id}", response_model=InvoiceTransactionResponse)
+async def update_invoice_transaction(
+    invoice_id: int,
+    invoice_update: InvoiceTransactionUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Update a payment transaction"""
+    """Update an invoice transaction"""
     try:
         result = await db.execute(
-            select(Invoice).where(Invoice.id == payment_id)
+            select(Invoice).where(Invoice.id == invoice_id)
         )
         invoice = result.scalar_one_or_none()
         
         if not invoice:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Payment transaction with id {payment_id} not found"
+                detail=f"Invoice transaction with id {invoice_id} not found"
             )
         
         # Update invoice fields
-        if payment_update.category is not None:
-            invoice.category = payment_update.category
-        if payment_update.amount is not None:
-            invoice.due_amount = payment_update.amount
+        if invoice_update.category is not None:
+            invoice.category = invoice_update.category
+        if invoice_update.amount is not None:
+            invoice.due_amount = invoice_update.amount
             if invoice.status == "已交":
-                invoice.paid_amount = payment_update.amount
-        if payment_update.due_date is not None:
-            invoice.due_date = payment_update.due_date
-        if payment_update.period_start is not None:
-            invoice.period_start = payment_update.period_start
-        if payment_update.period_end is not None:
-            invoice.period_end = payment_update.period_end
-        if payment_update.status is not None:
-            invoice.status = payment_update.status
-            if payment_update.status == "已交" and payment_update.amount:
-                invoice.paid_amount = payment_update.amount
-            elif payment_update.status != "已交":
+                invoice.paid_amount = invoice_update.amount
+        if invoice_update.due_date is not None:
+            invoice.due_date = invoice_update.due_date
+        if invoice_update.period_start is not None:
+            invoice.period_start = invoice_update.period_start
+        if invoice_update.period_end is not None:
+            invoice.period_end = invoice_update.period_end
+        if invoice_update.status is not None:
+            invoice.status = invoice_update.status
+            if invoice_update.status == "已交" and invoice_update.amount:
+                invoice.paid_amount = invoice_update.amount
+            elif invoice_update.status != "已交":
                 invoice.paid_amount = 0
         
         await db.commit()
@@ -415,7 +413,7 @@ async def update_payment_transaction(
         tenant_data = tenant_result.first()
         tenant_name = f"{tenant_data[0].last_name}{tenant_data[0].first_name}" if tenant_data else "Unknown"
         
-        return PaymentTransactionResponse(
+        return InvoiceTransactionResponse(
             id=invoice.id,
             invoice_id=invoice.id,
             room_id=lease.room_id,
@@ -427,9 +425,9 @@ async def update_payment_transaction(
             period_start=invoice.period_start,
             period_end=invoice.period_end,
             status=invoice.status,
-            paid_date=payment_update.paid_date,
-            payment_method=payment_update.payment_method,
-            note=payment_update.note
+            paid_date=invoice_update.paid_date,
+            payment_method=invoice_update.payment_method,
+            note=invoice_update.note
         )
     except HTTPException:
         raise
@@ -437,26 +435,26 @@ async def update_payment_transaction(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating payment transaction: {str(e)}"
+            detail=f"Error updating invoice transaction: {str(e)}"
         ) from e
 
 
-@router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_payment_transaction(
-    payment_id: int,
+@router.delete("/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_invoice_transaction(
+    invoice_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a payment transaction"""
+    """Delete an invoice transaction"""
     try:
         result = await db.execute(
-            select(Invoice).where(Invoice.id == payment_id)
+            select(Invoice).where(Invoice.id == invoice_id)
         )
         invoice = result.scalar_one_or_none()
         
         if not invoice:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Payment transaction with id {payment_id} not found"
+                detail=f"Invoice transaction with id {invoice_id} not found"
             )
         
         await db.delete(invoice)
@@ -467,6 +465,6 @@ async def delete_payment_transaction(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting payment transaction: {str(e)}"
+            detail=f"Error deleting invoice transaction: {str(e)}"
         ) from e
 

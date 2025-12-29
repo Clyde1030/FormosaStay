@@ -1,4 +1,4 @@
-# app/schemas/payment.py
+# app/schemas/invoice.py
 from pydantic import BaseModel, Field
 from datetime import date
 from decimal import Decimal
@@ -41,24 +41,24 @@ class RentNoteResponse(BaseModel):
     formatted_note: str = Field(..., description="Formatted note with discount information if applicable")
 
 
-class PaymentTransactionCreate(BaseModel):
-    """Schema for creating a payment transaction (rent, electricity, deposit)"""
+class InvoiceTransactionCreate(BaseModel):
+    """Schema for creating an invoice transaction (rent, electricity, deposit)"""
     room_id: int = Field(..., description="Room ID")
     lease_id: Optional[int] = Field(None, description="Lease ID (optional, will be inferred from room if not provided)")
     category: str = Field(..., description="Category: '房租', '電費', '押金', or '罰款'")
-    amount: Decimal = Field(..., gt=0, description="Payment amount")
+    amount: Decimal = Field(..., gt=0, description="Invoice amount")
     due_date: date = Field(..., description="Due date")
     period_start: Optional[date] = Field(None, description="Period start date (for rent/electricity)")
     period_end: Optional[date] = Field(None, description="Period end date (for rent/electricity)")
-    status: str = Field(default="已交", description="Payment status: '已交', '未交', '部分未交', '呆帳', '歸還', '取消'")
+    status: str = Field(default="已交", description="Invoice status: '已交', '未交', '部分未交', '呆帳', '歸還', '取消'")
     paid_date: Optional[date] = Field(None, description="Paid date (if status is '已交')")
     payment_method: Optional[str] = Field(None, description="Payment method: '銀行轉帳', '現金', 'LINE Pay', '其他'")
     note: Optional[str] = Field(None, description="Optional note")
     cash_account_id: Optional[int] = Field(None, description="Cash account ID (optional, will use default if not provided)")
 
 
-class PaymentTransactionUpdate(BaseModel):
-    """Schema for updating a payment transaction"""
+class InvoiceTransactionUpdate(BaseModel):
+    """Schema for updating an invoice transaction"""
     category: Optional[str] = None
     amount: Optional[Decimal] = Field(None, gt=0)
     due_date: Optional[date] = None
@@ -70,8 +70,8 @@ class PaymentTransactionUpdate(BaseModel):
     note: Optional[str] = None
 
 
-class PaymentTransactionResponse(BaseModel):
-    """Schema for payment transaction response"""
+class InvoiceTransactionResponse(BaseModel):
+    """Schema for invoice transaction response"""
     id: int
     invoice_id: int
     room_id: int
