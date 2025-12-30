@@ -12,9 +12,9 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeView }) 
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'finance', label: 'Finance & Payments', icon: DollarSign },
         { id: 'tenants', label: 'Tenants & Contracts', icon: Users },
         { id: 'rooms', label: 'Buildings & Rooms', icon: Home },
+        { id: 'finance', label: 'Finance & Payments', icon: DollarSign },
         { id: 'settings', label: 'System Settings', icon: Settings },
     ];
 
