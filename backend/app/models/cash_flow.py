@@ -27,8 +27,8 @@ class CashAccount(Base):
     __tablename__ = "cash_account"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    chinese_name = Column(String, nullable=False)
     account_type = Column(cash_account_type, nullable=False)  # 'bank', 'cash', 'clearing', 'deposit'
+    chinese_name = Column(String, nullable=False)
     note = Column(Text, nullable=True)
 
     # Relationships

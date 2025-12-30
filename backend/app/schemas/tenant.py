@@ -28,7 +28,7 @@ class TenantCreate(BaseModel):
     """Schema for creating/updating tenant information"""
     first_name: str = Field(..., description="Tenant first name")
     last_name: str = Field(..., description="Tenant last name")
-    gender: str = Field(..., description="Gender: '男', '女', or '其他'")
+    gender: str = Field(..., description="Gender: 'M', 'F', or 'O'")
     birthday: date = Field(..., description="Date of birth")
     personal_id: str = Field(..., description="Personal ID (unique identifier)")
     phone: str = Field(..., description="Phone number")
@@ -43,7 +43,7 @@ class TenantCreate(BaseModel):
     @field_validator("gender")
     @classmethod
     def validate_gender(cls, v: str) -> str:
-        allowed = {"男", "女", "其他"}
+        allowed = {"M", "F", "O"}
         if v not in allowed:
             raise ValueError(f"gender must be one of {allowed}")
         return v

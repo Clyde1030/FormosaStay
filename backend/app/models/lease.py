@@ -1,5 +1,5 @@
 # app/models/lease.py
-from sqlalchemy import Column, BigInteger, Date, Numeric, SmallInteger, String, ForeignKey, CheckConstraint, Index, text
+from sqlalchemy import Column, BigInteger, Date, Numeric, SmallInteger, String, ForeignKey, CheckConstraint, Index, text, Integer, DateTime, func
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import relationship
 from datetime import date
@@ -8,6 +8,8 @@ from app.models.base import Base, AuditMixin
 # Define ENUM types
 payment_term_type = ENUM('annual', 'semi-annual', 'seasonal', 'monthly', name='payment_term_type', create_type=False)
 tenant_role_type = ENUM('primary', 'secondary', name='tenant_role_type', create_type=False)
+lease_amendment_type = ENUM('rent_change', 'discount', 'other', name='lease_amendment_type', create_type=False)
+discount_type = ENUM('free_months', 'fixed_amount', 'percentage', name='discount_type', create_type=False)
 
 
 class Lease(Base, AuditMixin):
@@ -19,6 +21,7 @@ class Lease(Base, AuditMixin):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     early_termination_date = Column(Date, nullable=True)
+    termination_reason = Column(String, nullable=True)
 
     monthly_rent = Column(Numeric(10, 2), nullable=False)
     deposit = Column(Numeric(10, 2), nullable=False)
@@ -32,6 +35,7 @@ class Lease(Base, AuditMixin):
     tenants = relationship("LeaseTenant", back_populates="lease", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="lease")  # No cascade - keep invoices for audit even if lease is deleted
     cash_flows = relationship("CashFlow", back_populates="lease")
+    amendments = relationship("LeaseAmendment", back_populates="lease", cascade="all, delete-orphan")
 
     def get_status(self) -> str:
         """
@@ -83,5 +87,46 @@ class LeaseTenant(Base):
 
     __table_args__ = (
         Index("uq_primary_tenant", "lease_id", unique=True, postgresql_where=text("tenant_role = 'primary'")),
+    )
+
+
+class LeaseAmendment(Base):
+    __tablename__ = "lease_amendment"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    lease_id = Column(BigInteger, ForeignKey("lease.id"), nullable=False)
+    amendment_type = Column(lease_amendment_type, nullable=False)  # 'rent_change', 'discount', 'other'
+    effective_date = Column(Date, nullable=False)
+
+    # Financial deltas (nullable depending on amendment_type)
+    old_monthly_rent = Column(Numeric(10, 2), nullable=True)
+    new_monthly_rent = Column(Numeric(10, 2), nullable=True)
+
+    # DISCOUNT fields
+    discount_type = Column(discount_type, nullable=True)  # 'free_months', 'fixed_amount', 'percentage'
+    discount_value = Column(Numeric(10, 2), nullable=True)
+    applies_to_payment_term = Column(payment_term_type, nullable=True)
+    billing_cycle_months = Column(Integer, nullable=True)
+
+    reason = Column(String, nullable=False)
+    created_by = Column(BigInteger, ForeignKey("user_account.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    lease = relationship("Lease", back_populates="amendments")
+
+    __table_args__ = (
+        # Rent change amendments must have both values
+        CheckConstraint(
+            "amendment_type <> 'rent_change' OR (old_monthly_rent IS NOT NULL AND new_monthly_rent IS NOT NULL AND old_monthly_rent >= 0 AND new_monthly_rent >= 0)",
+            name="chk_rent_change_values"
+        ),
+        # Discount amendments must have discount_type and discount_value
+        CheckConstraint(
+            "amendment_type <> 'discount' OR (discount_type IS NOT NULL AND discount_value IS NOT NULL)",
+            name="chk_discount_values"
+        ),
+        Index("uq_rent_change_effective", "lease_id", "effective_date", unique=True, postgresql_where=text("amendment_type = 'rent_change' AND deleted_at IS NULL")),
     )
 

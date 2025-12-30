@@ -8,14 +8,12 @@ class ElectricityRate(Base, AuditMixin):
     __tablename__ = "electricity_rate"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    building_id = Column(BigInteger, ForeignKey("building.id"), nullable=False)
     room_id = Column(BigInteger, ForeignKey("room.id"), nullable=True)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     rate_per_kwh = Column(Numeric(10, 4), nullable=False)
 
     # Relationships
-    building = relationship("Building", back_populates="electricity_rates")
     room = relationship("Room", back_populates="electricity_rates")
 
 

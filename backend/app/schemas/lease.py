@@ -9,13 +9,13 @@ from app.schemas.tenant import TenantCreate
 
 class LeaseAssetCreate(BaseModel):
     """Schema for creating a lease asset (used in JSONB assets array)"""
-    type: str = Field(..., description="Type of asset: '鑰匙', '磁扣', or '遙控器'")
+    type: str = Field(..., description="Type of asset: 'key', 'fob', or 'controller'")
     quantity: int = Field(default=1, ge=1, description="Quantity of the asset")
 
     @field_validator("type")
     @classmethod
     def validate_asset_type(cls, v: str) -> str:
-        allowed = {"鑰匙", "磁扣", "遙控器"}
+        allowed = {"key", "fob", "controller"}
         if v not in allowed:
             raise ValueError(f"asset type must be one of {allowed}")
         return v
@@ -58,7 +58,7 @@ class LeaseRenew(BaseModel):
     new_monthly_rent: Optional[Decimal] = Field(None, gt=0, description="New monthly rent (optional, uses current if not provided)")
     new_deposit: Optional[Decimal] = Field(None, ge=0, description="New deposit amount (optional)")
     new_pay_rent_on: Optional[int] = Field(None, ge=1, le=31, description="New rent due day (optional)")
-    new_payment_term: Optional[str] = Field(None, description="New payment term: '年繳', '半年繳', '季繳', or '月繳' (optional)")
+    new_payment_term: Optional[str] = Field(None, description="New payment term: 'annual', 'semi-annual', 'seasonal', or 'monthly' (optional)")
     new_vehicle_plate: Optional[str] = Field(None, description="New vehicle/motorcycle plate number (optional)")
 
     @field_validator("new_end_date")

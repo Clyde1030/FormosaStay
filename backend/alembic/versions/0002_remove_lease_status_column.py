@@ -49,6 +49,24 @@ def upgrade() -> None:
             END IF;
         END $$;
     """)
+    
+    # Add due_date column to invoice table if it doesn't exist
+    # This column is required by the views but was missing from the initial schema
+    op.execute("""
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'invoice' AND column_name = 'due_date'
+            ) THEN
+                ALTER TABLE invoice ADD COLUMN due_date DATE;
+                -- Set default value to period_end for existing records
+                UPDATE invoice SET due_date = period_end WHERE due_date IS NULL;
+                -- Now make it NOT NULL
+                ALTER TABLE invoice ALTER COLUMN due_date SET NOT NULL;
+            END IF;
+        END $$;
+    """)
 
     execute_sql_file(op, "0002_v_lease_status.sql")
     execute_sql_file(op, "0002_v_room_availability.sql")

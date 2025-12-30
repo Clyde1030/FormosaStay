@@ -9,7 +9,7 @@ class UserAccount(Base, TimestampMixin):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     email = Column(String, nullable=False, unique=True)
-    password_hash = Column(String, nullable=False)
+    user_password = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
 
     # Relationships
@@ -36,4 +36,18 @@ class UserRole(Base):
     # Relationships
     user = relationship("UserAccount", back_populates="roles")
     role = relationship("Role", back_populates="users")
+
+
+class Employee(Base):
+    __tablename__ = "employee"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
+    role_id = Column(SmallInteger, ForeignKey("role.id"), nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    phone = Column(String, nullable=False)
+
+    # Relationships
+    role = relationship("Role")
 

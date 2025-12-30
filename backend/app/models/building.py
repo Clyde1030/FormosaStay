@@ -10,9 +10,10 @@ class Building(Base, AuditMixin):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     building_no = Column(Integer, nullable=False, unique=True)
     address = Column(Text, nullable=False)
+    landlord_name = Column(Text, nullable=True)
+    landlord_address = Column(Text, nullable=True)
 
     # Relationships
     rooms = relationship("Room", back_populates="building", cascade="all, delete-orphan")
-    electricity_rates = relationship("ElectricityRate", back_populates="building", cascade="all, delete-orphan")
     cash_flows = relationship("CashFlow", back_populates="building")
 

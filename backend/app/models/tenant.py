@@ -5,7 +5,7 @@ from sqlalchemy.orm import relationship as rel
 from app.models.base import Base, AuditMixin
 
 # Define ENUM types
-gender_type = ENUM('男', '女', '其他', name='gender_type', create_type=False)
+gender_type = ENUM('M', 'F', 'O', name='gender_type', create_type=False)
 
 
 class Tenant(Base, AuditMixin):
@@ -14,13 +14,13 @@ class Tenant(Base, AuditMixin):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     first_name = Column(Text, nullable=False)
     last_name = Column(Text, nullable=False)
-    gender = Column(gender_type, nullable=False)  # '男', '女', '其他'
+    gender = Column(gender_type, nullable=False)  # 'M', 'F', 'O'
     birthday = Column(Date, nullable=False)
     personal_id = Column(Text, nullable=False, unique=True)
     phone = Column(Text, nullable=False)
     email = Column(Text, nullable=True)
     line_id = Column(Text, nullable=True)
-    address = Column(Text, nullable=False)
+    home_address = Column(Text, nullable=False)
 
     # Relationships
     lease_tenants = rel("LeaseTenant", back_populates="tenant")

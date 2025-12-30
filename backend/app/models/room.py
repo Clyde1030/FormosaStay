@@ -1,5 +1,5 @@
 # app/models/room.py
-from sqlalchemy import Column, BigInteger, Integer, String, Numeric, ForeignKey, Boolean, Index
+from sqlalchemy import Column, BigInteger, Integer, String, Numeric, ForeignKey, Boolean, Index, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.models.base import Base, AuditMixin
 
@@ -23,5 +23,6 @@ class Room(Base, AuditMixin):
 
     __table_args__ = (
         Index("uq_room", "building_id", "floor_no", "room_no", unique=True),
+        CheckConstraint("room_no ~ '^[A-Z]$'", name="chk_room_no_format"),
     )
 
