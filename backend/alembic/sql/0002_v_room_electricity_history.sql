@@ -34,7 +34,6 @@ SELECT
     inv.id AS invoice_id,
     inv.period_start,
     inv.period_end,
-    inv.due_date,
     inv.due_amount AS electricity_cost,
     inv.paid_amount,
     inv.payment_status AS payment_status,

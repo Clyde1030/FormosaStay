@@ -18,7 +18,6 @@ SELECT
     inv.category,
     inv.period_start,
     inv.period_end,
-    inv.due_date,
     inv.due_amount,
     inv.paid_amount,
     inv.payment_status AS payment_status,
@@ -53,8 +52,6 @@ SELECT
             (TO_CHAR(inv.period_start, 'YYYY-MM') || ' Rent')::TEXT
         WHEN inv.category = 'electricity' THEN 
             (TO_CHAR(inv.period_start, 'YYYY-MM') || ' Electricity')::TEXT
-        WHEN inv.category = 'penalty' THEN 
-            ('Penalty: ' || TO_CHAR(inv.due_date, 'YYYY-MM-DD'))::TEXT
         WHEN inv.category = 'deposit' THEN 
             'Deposit'::TEXT
         ELSE inv.category::TEXT
@@ -69,4 +66,4 @@ LEFT JOIN lease_tenant lt ON lt.lease_id = l.id
 LEFT JOIN tenant t ON t.id = lt.tenant_id
 WHERE r.deleted_at IS NULL
     AND l.deleted_at IS NULL
-ORDER BY r.id, inv.due_date DESC, inv.created_at DESC;
+ORDER BY r.id, inv.created_at DESC;
