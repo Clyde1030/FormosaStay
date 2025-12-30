@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap, Loader2, Plus, Trash2, Users } from 'lucide-react';
+import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap, Loader2, Plus, Trash2, Users, FileEdit } from 'lucide-react';
 import { TenantWithContract, ContractStatus, PaymentFrequency, DepositStatus, Contract, EmergencyContact } from '../types';
-import { calculateProration, terminateContract, renewContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate } from '../services/propertyService';
+import { calculateProration, terminateContract, renewContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate, amendContract, submitContract } from '../services/propertyService';
 import { generateContractPDF } from '../services/contractPdfService';
 import NewContractModal from './NewContractModal';
 
@@ -12,7 +12,7 @@ interface Props {
 }
 
 const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
-    const [view, setView] = useState<'details' | 'terminate' | 'renew' | 'create'>('details');
+    const [view, setView] = useState<'details' | 'terminate' | 'renew' | 'create' | 'amend'>('details');
     const [isEditing, setIsEditing] = useState(false);
     
     // Edit Form State
@@ -45,6 +45,18 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
             }
         }
     }, [finalReading, tenant.room, currentRate]);
+
+    // Initialize amend form when switching to amend view
+    useEffect(() => {
+        if (view === 'amend' && tenant.currentContract) {
+            setAmendOldRent(tenant.currentContract.rentAmount);
+            setAmendNewRent(tenant.currentContract.rentAmount);
+            // Set default effective date to tomorrow
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            setAmendEffectiveDate(tomorrow.toISOString().split('T')[0]);
+        }
+    }, [view, tenant.currentContract]);
 
     const handleCalculateProration = () => {
         if (!terminationDate || !tenant.currentContract) return;
@@ -109,6 +121,79 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
         } catch (err: any) {
             setError(err.message || 'Failed to renew contract. Please try again.');
             console.error('Error renewing contract:', err);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleAmend = async () => {
+        if (!tenant.currentContract || !tenant.room) return;
+        
+        if (!amendEffectiveDate || !amendReason.trim()) {
+            setError('Please fill in all required fields.');
+            return;
+        }
+
+        if (amendNewRent <= 0) {
+            setError('New rent amount must be greater than 0.');
+            return;
+        }
+
+        if (amendOldRent <= 0) {
+            setError('Old rent amount must be greater than 0.');
+            return;
+        }
+
+        // Validate effective date is in the future
+        const effectiveDate = new Date(amendEffectiveDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (effectiveDate <= today) {
+            setError('Effective date must be in the future.');
+            return;
+        }
+        
+        setIsSubmitting(true);
+        setError(null);
+        
+        try {
+            await amendContract(tenant.currentContract.id, {
+                effective_date: amendEffectiveDate,
+                old_rent: amendOldRent,
+                new_rent: amendNewRent,
+                reason: amendReason.trim()
+            });
+            
+            onClose();
+            // Trigger refresh in parent component if callback exists
+            if ((onClose as any).onSuccess) {
+                (onClose as any).onSuccess();
+            }
+        } catch (err: any) {
+            setError(err.message || 'Failed to amend contract. Please try again.');
+            console.error('Error amending contract:', err);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleSubmitContract = async () => {
+        if (!tenant.currentContract) return;
+        
+        setIsSubmitting(true);
+        setError(null);
+        
+        try {
+            await submitContract(tenant.currentContract.id);
+            
+            // Trigger refresh in parent component to refetch lease data
+            onClose();
+            if ((onClose as any).onSuccess) {
+                (onClose as any).onSuccess();
+            }
+        } catch (err: any) {
+            setError(err.message || 'Failed to submit contract. Please try again.');
+            console.error('Error submitting contract:', err);
         } finally {
             setIsSubmitting(false);
         }
@@ -180,6 +265,12 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     const [renewFrequency, setRenewFrequency] = useState<PaymentFrequency>(tenant.currentContract?.paymentFrequency || PaymentFrequency.MONTHLY);
     const [renewVehiclePlate, setRenewVehiclePlate] = useState(tenant.currentContract?.vehicle_plate || '');
 
+    // Amendment Form State
+    const [amendEffectiveDate, setAmendEffectiveDate] = useState('');
+    const [amendOldRent, setAmendOldRent] = useState(tenant.currentContract?.rentAmount || 0);
+    const [amendNewRent, setAmendNewRent] = useState(tenant.currentContract?.rentAmount || 0);
+    const [amendReason, setAmendReason] = useState('');
+
     if (!tenant) return null;
 
     return (
@@ -242,7 +333,12 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                         <>
                             <div className="flex justify-end gap-2 mb-2">
                                 {!isEditing && (
-                                    <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 text-slate-600">
+                                    <button 
+                                        onClick={() => setIsEditing(true)} 
+                                        disabled={tenant.currentContract?.submitted_at !== null && tenant.currentContract?.submitted_at !== undefined}
+                                        className="flex items-center gap-2 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title={tenant.currentContract?.submitted_at ? 'Contract has been submitted and cannot be edited' : 'Edit contract details'}
+                                    >
                                         <Edit size={16} /> Edit Profile
                                     </button>
                                 )}
@@ -415,40 +511,79 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                     <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                                         <CreditCard size={20} className="text-brand-500"/> Current Contract
                                     </h3>
-                                    {tenant.currentContract?.status === ContractStatus.ACTIVE && (
-                                        <div className="flex gap-2">
-                                            <button onClick={handlePrint} className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Print Contract">
-                                                <Printer size={18} />
-                                            </button>
+                                    <div className="flex gap-2">
+                                        {/* Submit Contract button - only show for draft leases that haven't been submitted */}
+                                        {tenant.currentContract?.status === ContractStatus.DRAFT && !tenant.currentContract?.submitted_at && (
                                             <button 
-                                                onClick={() => setView('renew')}
-                                                className="px-3 py-1.5 text-sm bg-brand-50 text-brand-700 rounded-lg hover:bg-brand-100 font-medium flex items-center gap-1"
+                                                onClick={handleSubmitContract}
+                                                disabled={isSubmitting}
+                                                className="px-3 py-1.5 text-sm bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                <FilePlus size={14}/> Renew
+                                                {isSubmitting ? (
+                                                    <>
+                                                        <Loader2 className="animate-spin" size={14}/> Submitting...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <CheckCircle size={14}/> Submit Contract
+                                                    </>
+                                                )}
                                             </button>
-                                            <button 
-                                                onClick={() => setView('terminate')}
-                                                className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium flex items-center gap-1"
-                                            >
-                                                <LogOut size={14}/> Terminate
-                                            </button>
-                                        </div>
-                                    )}
+                                        )}
+                                        {/* Active lease actions */}
+                                        {tenant.currentContract?.status === ContractStatus.ACTIVE && (
+                                            <>
+                                                <button onClick={handlePrint} className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Print Contract">
+                                                    <Printer size={18} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => setView('amend')}
+                                                    className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-1"
+                                                >
+                                                    <FileEdit size={14}/> Amend
+                                                </button>
+                                                <button 
+                                                    onClick={() => setView('renew')}
+                                                    className="px-3 py-1.5 text-sm bg-brand-50 text-brand-700 rounded-lg hover:bg-brand-100 font-medium flex items-center gap-1"
+                                                >
+                                                    <FilePlus size={14}/> Renew
+                                                </button>
+                                                <button 
+                                                    onClick={() => setView('terminate')}
+                                                    className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium flex items-center gap-1"
+                                                >
+                                                    <LogOut size={14}/> Terminate
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                                 
                                 {tenant.currentContract ? (
                                     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                                        {/* Submitted indicator */}
+                                        {tenant.currentContract.submitted_at && (
+                                            <div className="px-4 pt-3 pb-2 bg-blue-50 border-b border-blue-100">
+                                                <div className="flex items-center gap-2 text-xs text-blue-700">
+                                                    <CheckCircle size={14} className="text-blue-600"/>
+                                                    <span className="font-medium">Submitted – awaiting activation</span>
+                                                    <span className="text-blue-500">
+                                                        ({new Date(tenant.currentContract.submitted_at).toLocaleDateString()})
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="p-4 grid grid-cols-2 gap-y-4">
                                             <div>
                                                 <label className="text-xs text-slate-400">Status</label>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={`w-2 h-2 rounded-full ${tenant.currentContract.status === 'active' ? 'bg-emerald-500' : tenant.currentContract.status === 'pending' ? 'bg-blue-500' : 'bg-red-500'}`}></span>
+                                                    <span className={`w-2 h-2 rounded-full ${tenant.currentContract.status === 'active' ? 'bg-emerald-500' : tenant.currentContract.status === 'pending' ? 'bg-blue-500' : tenant.currentContract.status === 'draft' ? 'bg-slate-400' : 'bg-red-500'}`}></span>
                                                     <span className="font-medium">{tenant.currentContract.status}</span>
                                                 </div>
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Rent Amount (Monthly Base)</label>
-                                                {isEditing && editContract ? (
+                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-sm">NT$</span>
                                                         <input className="w-24 border rounded px-1" type="number" value={editContract.rentAmount} onChange={e => setEditContract({...editContract, rentAmount: Number(e.target.value)})} />
@@ -459,7 +594,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Payment Frequency</label>
-                                                {isEditing && editContract ? (
+                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
                                                     <select 
                                                         className="w-full border rounded px-1 text-sm py-1" 
                                                         value={editContract.paymentFrequency} 
@@ -475,7 +610,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Vehicle Plate</label>
-                                                {isEditing && editContract ? (
+                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
                                                     <input 
                                                         className="w-full border rounded px-1 text-sm py-1" 
                                                         value={editContract.vehicle_plate || ''} 
@@ -488,7 +623,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Duration</label>
-                                                {isEditing && editContract ? (
+                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
                                                     <div className="flex flex-col gap-1">
                                                         <input type="date" className="border rounded px-1 text-sm" value={editContract.startDate} onChange={e => setEditContract({...editContract, startDate: e.target.value})} />
                                                         <input type="date" className="border rounded px-1 text-sm" value={editContract.endDate} onChange={e => setEditContract({...editContract, endDate: e.target.value})} />
@@ -501,7 +636,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Deposit</label>
-                                                {isEditing && editContract ? (
+                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
                                                      <div className="flex items-center gap-1">
                                                         <span className="text-sm">NT$</span>
                                                         <input className="w-24 border rounded px-1" type="number" value={editContract.depositAmount} onChange={e => setEditContract({...editContract, depositAmount: Number(e.target.value)})} />
@@ -755,6 +890,105 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                              </div>
                          </div>
                      </div>
+                    )}
+
+                    {/* View: Amend Contract */}
+                    {view === 'amend' && tenant.currentContract && (
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 space-y-6">
+                            <h3 className="text-lg font-bold text-blue-800 flex items-center gap-2">
+                                <FileEdit className="text-blue-600"/> Amend Contract
+                            </h3>
+                            {error && (
+                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                                    {error}
+                                </div>
+                            )}
+                            <div className="space-y-4">
+                                <div className="bg-white p-4 rounded-lg border border-blue-200">
+                                    <p className="text-xs text-slate-500 mb-2">Current Monthly Rent</p>
+                                    <p className="text-lg font-bold text-slate-800">NT$ {tenant.currentContract.rentAmount.toLocaleString()}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-blue-900 mb-1">Effective Date <span className="text-red-500">*</span></label>
+                                    <input 
+                                        type="date" 
+                                        className="w-full border border-blue-200 rounded-lg p-2"
+                                        value={amendEffectiveDate}
+                                        onChange={(e) => setAmendEffectiveDate(e.target.value)}
+                                        min={new Date(Date.now() + 86400000).toISOString().split('T')[0]} // Tomorrow
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">The date when the rent change takes effect (must be in the future)</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-blue-900 mb-1">Current Rent (Old Rent) <span className="text-red-500">*</span></label>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-slate-600">NT$</span>
+                                        <input 
+                                            type="number" 
+                                            className="flex-1 border border-blue-200 rounded-lg p-2"
+                                            value={amendOldRent}
+                                            onChange={(e) => setAmendOldRent(Number(e.target.value))}
+                                            min="0"
+                                            step="0.01"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-blue-900 mb-1">New Rent Amount <span className="text-red-500">*</span></label>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-slate-600">NT$</span>
+                                        <input 
+                                            type="number" 
+                                            className="flex-1 border border-blue-200 rounded-lg p-2"
+                                            value={amendNewRent}
+                                            onChange={(e) => setAmendNewRent(Number(e.target.value))}
+                                            min="0"
+                                            step="0.01"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-blue-900 mb-1">Reason for Amendment <span className="text-red-500">*</span></label>
+                                    <textarea 
+                                        className="w-full border border-blue-200 rounded-lg p-2 h-24"
+                                        placeholder="e.g., Rent increase due to market conditions"
+                                        value={amendReason}
+                                        onChange={(e) => setAmendReason(e.target.value)}
+                                    ></textarea>
+                                </div>
+
+                                <div className="flex gap-3 pt-4">
+                                    <button 
+                                        disabled={isSubmitting}
+                                        className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        onClick={handleAmend}
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="animate-spin" size={16} />
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            'Submit Amendment'
+                                        )}
+                                    </button>
+                                    <button 
+                                        className="px-4 py-2 border border-slate-300 bg-white rounded-lg hover:bg-slate-50"
+                                        onClick={() => {
+                                            setView('details');
+                                            setError(null);
+                                            // Reset form
+                                            setAmendEffectiveDate('');
+                                            setAmendOldRent(tenant.currentContract?.rentAmount || 0);
+                                            setAmendNewRent(tenant.currentContract?.rentAmount || 0);
+                                            setAmendReason('');
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     )}
 
                     {/* View: Create Contract */}

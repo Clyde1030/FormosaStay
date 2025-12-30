@@ -147,12 +147,32 @@ async def submit_lease(
     # current_user: User = Depends(get_current_user)
 ):
     """
-    Submit a draft lease.
+    Submit a draft lease (explicit state transition).
     
-    Moves a draft lease to pending status by setting submitted_at.
-    Only draft leases can be submitted.
+    This endpoint transitions a lease from DRAFT to PENDING using an explicit action.
+    It does NOT accept a request body.
+    
+    Submission semantics:
+    - The lease is finalized by the property manager
+    - The lease becomes non-editable (except via amendment later)
+    - The lease is awaiting activation based on start_date
+    
+    Submission is represented by setting lease.submitted_at = current_timestamp.
+    
+    Submission MUST NOT:
+    - change start_date or end_date
+    - generate invoices
+    - activate the lease
+    
+    Returns:
+    - 200: Lease successfully submitted
+    - 404: Lease not found
+    - 409: Lease already submitted (idempotency)
+    - 422: Invalid submission conditions (not draft, has invoices/cashflows)
     """
-    lease = await LeaseService.submit_lease(db, lease_id)
+    # TODO: Get submitted_by from current_user when authentication is added
+    submitted_by = None
+    lease = await LeaseService.submit_lease(db, lease_id, submitted_by=submitted_by)
     return build_lease_response(lease)
 
 

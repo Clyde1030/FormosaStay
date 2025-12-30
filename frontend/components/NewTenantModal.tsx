@@ -30,11 +30,18 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         setIsSubmitting(true);
 
         try {
+            // Map Chinese gender values to backend expected values
+            const genderMap: Record<string, string> = {
+                '男': 'M',
+                '女': 'F',
+                '其他': 'O'
+            };
+            
             // Map form data to backend schema
             const tenantData = {
                 first_name: formData.first_name.trim(),
                 last_name: formData.last_name.trim(),
-                gender: formData.gender,
+                gender: genderMap[formData.gender] || formData.gender,
                 birthday: formData.birthday,
                 personal_id: formData.personal_id.trim(),
                 phone: formData.phone.trim(),

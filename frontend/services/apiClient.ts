@@ -29,7 +29,20 @@ class ApiClient {
                 let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
                 try {
                     const errorData = await response.json();
-                    errorMessage = errorData.detail || errorData.message || errorMessage;
+                    // Handle FastAPI validation errors (array format)
+                    if (Array.isArray(errorData.detail)) {
+                        const errors = errorData.detail.map((err: any) => {
+                            const field = err.loc ? err.loc.join('.') : 'field';
+                            return `${field}: ${err.msg}`;
+                        }).join('; ');
+                        errorMessage = errors || errorMessage;
+                    } else if (errorData.detail) {
+                        errorMessage = typeof errorData.detail === 'string' 
+                            ? errorData.detail 
+                            : JSON.stringify(errorData.detail);
+                    } else if (errorData.message) {
+                        errorMessage = errorData.message;
+                    }
                 } catch {
                     // If response is not JSON, use status text
                 }

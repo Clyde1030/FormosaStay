@@ -17,6 +17,7 @@ export enum LeaseStatus {
 
 // Added for component compatibility - display labels
 export enum ContractStatus {
+    DRAFT = 'draft',
     PENDING = 'pending',
     ACTIVE = 'active',
     TERMINATED = 'terminated',
@@ -106,6 +107,7 @@ export interface Contract extends Lease {
     itemsIssued: string[];
     // Fix: Added paymentFrequency to Contract interface to match component expectations
     paymentFrequency: PaymentFrequency;
+    submitted_at?: string | null; // ISO timestamp when lease was submitted
 }
 
 export interface TenantWithLease extends Tenant {

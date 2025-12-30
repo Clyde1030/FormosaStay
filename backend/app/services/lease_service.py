@@ -60,7 +60,8 @@ async def assert_lease_editable(
     Assert that a lease is editable.
     
     A lease is freely editable ONLY if:
-    - status IN (draft, pending)
+    - status == draft (submitted leases cannot be edited)
+    - submitted_at IS NULL
     - no invoices exist for the lease
     - no cashflows exist for the lease
     
@@ -69,11 +70,18 @@ async def assert_lease_editable(
     if today is None:
         today = date.today()
     
+    # Check if lease has been submitted
+    if lease.submitted_at is not None:
+        raise LeaseNotEditableError(
+            f"Cannot edit lease: lease has been submitted (submitted_at: {lease.submitted_at}). "
+            "Submitted leases cannot be edited. Only draft leases can be edited."
+        )
+    
     status = determine_lease_status(lease, today)
     
-    if status not in ("draft", "pending"):
+    if status != "draft":
         raise LeaseNotEditableError(
-            f"Cannot edit lease with status '{status}'. Only draft and pending leases can be edited."
+            f"Cannot edit lease with status '{status}'. Only draft leases can be edited."
         )
     
     # Check for invoices
@@ -514,14 +522,30 @@ class LeaseService:
     async def submit_lease(
         db: AsyncSession,
         lease_id: int,
-        updated_by: Optional[int] = None
+        submitted_by: Optional[int] = None
     ) -> Lease:
         """
         Submit a draft lease (moves it to pending status).
         
-        Business rules:
-        - Lease must be in draft status
-        - Sets submitted_at timestamp
+        Submission semantics:
+        - The lease is finalized by the property manager
+        - The lease becomes non-editable (except via amendment later)
+        - The lease is awaiting activation based on start_date
+        
+        Submission is represented by setting lease.submitted_at = current_timestamp.
+        
+        Submission MUST NOT:
+        - change start_date or end_date
+        - generate invoices
+        - activate the lease
+        
+        Allowed submission conditions:
+        - lease.submitted_at IS NULL
+        - derived status == draft
+        - no invoices exist
+        - no cashflows exist
+        
+        Raises domain-level errors if any condition fails.
         """
         # Get the lease
         result = await db.execute(
@@ -540,17 +564,70 @@ class LeaseService:
                 detail=f"Lease with id {lease_id} not found"
             )
         
-        # Check status is draft
+        # Get primary tenant for info messages
+        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+        if primary_tenant_relation:
+            tenant = primary_tenant_relation.tenant
+            tenant_name = f"{tenant.first_name} {tenant.last_name}"
+            tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
+        else:
+            tenant_info = f"Lease ID: {lease_id}"
+        
+        # Check 1: submitted_at must be NULL (idempotency check)
+        if lease.submitted_at is not None:
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail=f"Cannot submit lease: lease has already been submitted (submitted_at: {lease.submitted_at}). "
+                       f"Submission is idempotent-safe and cannot be repeated. {tenant_info}"
+            )
+        
+        # Check 2: status must be draft
         current_status = determine_lease_status(lease)
         if current_status != "draft":
             raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot submit lease with status '{current_status}'. Only draft leases can be submitted."
+                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Cannot submit lease with status '{current_status}'. Only draft leases can be submitted. {tenant_info}"
             )
         
-        # Set submitted_at
+        # Check 3: no invoices must exist
+        invoice_count = await db.execute(
+            select(func.count(Invoice.id)).where(
+                and_(
+                    Invoice.lease_id == lease.id,
+                    Invoice.deleted_at.is_(None)
+                )
+            )
+        )
+        invoice_count = invoice_count.scalar() or 0
+        
+        if invoice_count > 0:
+            raise HTTPException(
+                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Cannot submit lease: {invoice_count} invoice(s) exist for this lease. "
+                       f"Leases with invoices cannot be submitted. {tenant_info}"
+            )
+        
+        # Check 4: no cashflows must exist
+        cashflow_count = await db.execute(
+            select(func.count(CashFlow.id)).where(
+                and_(
+                    CashFlow.lease_id == lease.id,
+                    CashFlow.deleted_at.is_(None)
+                )
+            )
+        )
+        cashflow_count = cashflow_count.scalar() or 0
+        
+        if cashflow_count > 0:
+            raise HTTPException(
+                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Cannot submit lease: {cashflow_count} cashflow(s) exist for this lease. "
+                       f"Leases with cashflows cannot be submitted. {tenant_info}"
+            )
+        
+        # All conditions met - submit the lease
         lease.submitted_at = datetime.now()
-        lease.updated_by = updated_by
+        lease.updated_by = submitted_by
         await db.commit()
         await db.refresh(lease)
         return lease

@@ -147,7 +147,8 @@ export const getTenantById = async (tenantId: number): Promise<TenantWithContrac
                 startDate: tenant.active_lease.start_date,
                 endDate: tenant.active_lease.end_date,
                 status: tenant.active_lease.status,
-                vehicle_plate: tenant.active_lease.vehicle_plate
+                vehicle_plate: tenant.active_lease.vehicle_plate,
+                submitted_at: tenant.active_lease.submitted_at || null
             } : undefined,
             room: tenant.active_lease?.room ? {
                 id: tenant.active_lease.room.id,
@@ -206,7 +207,8 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
                 itemsIssued: Array.isArray(tenantData.assets) ? tenantData.assets : [],
                 status: tenantData.lease_status,
                 vehicle_plate: tenantData.vehicle_plate,
-                pay_rent_on: tenantData.pay_rent_on
+                pay_rent_on: tenantData.pay_rent_on,
+                submitted_at: tenantData.submitted_at || null
             },
             room: {
                 id: tenantData.room_id,
@@ -604,13 +606,23 @@ export const createTenant = async (tenant: Partial<Tenant>) => {
 };
 
 export const updateTenant = async (id: number, updates: Partial<Tenant>) => {
+    // Map Chinese gender values to backend expected values
+    const genderMap: Record<string, string> = {
+        '男': 'M',
+        '女': 'F',
+        '其他': 'O'
+    };
+    
     // Map frontend fields to backend schema
     // Note: first_name and last_name should always be present in the updates object
     // since they're part of the tenant object structure
+    const genderValue = updates.gender || 'M';
+    const mappedGender = genderMap[genderValue] || genderValue; // Map Chinese to English, or use as-is if already English
+    
     const tenantData: any = {
         first_name: updates.first_name || '',
         last_name: updates.last_name || '',
-        gender: updates.gender || '男', // Default to '男' (valid Chinese value)
+        gender: mappedGender, // Backend expects 'M', 'F', or 'O'
         birthday: updates.birthday || '',
         personal_id: updates.personal_id || updates.idNumber || '',
         phone: updates.phone || updates.phoneNumber || '',
@@ -757,6 +769,21 @@ export const renewContract = async (leaseId: number, renewData: {
     return data;
 };
 
+export const amendContract = async (leaseId: number, amendData: {
+    effective_date: string;
+    old_rent: number;
+    new_rent: number;
+    reason: string;
+}) => {
+    const data = await apiClient.post<any>(`/leases/${leaseId}/amend`, {
+        effective_date: amendData.effective_date,
+        old_rent: amendData.old_rent,
+        new_rent: amendData.new_rent,
+        reason: amendData.reason
+    });
+    return data;
+};
+
 export const createContract = async (contract: {
     tenant_id: number;
     room_id: number;
@@ -795,9 +822,42 @@ export const createContract = async (contract: {
     return data;
 };
 
+export const submitContract = async (leaseId: number) => {
+    const data = await apiClient.post<any>(`/leases/${leaseId}/submit`);
+    return data;
+};
+
 export const updateContract = async (id: number, updates: any) => {
-    // TODO: Add PUT /leases/{id} endpoint to backend
-    throw new Error('Not implemented - backend endpoint needed');
+    // Map frontend contract fields to backend schema
+    const updateData: any = {};
+    
+    if (updates.monthly_rent !== undefined) {
+        updateData.monthly_rent = updates.monthly_rent;
+    }
+    if (updates.payment_term !== undefined) {
+        updateData.payment_term = updates.payment_term;
+    }
+    if (updates.start_date !== undefined) {
+        updateData.start_date = updates.start_date;
+    }
+    if (updates.end_date !== undefined) {
+        updateData.end_date = updates.end_date;
+    }
+    if (updates.deposit !== undefined) {
+        updateData.deposit = updates.deposit;
+    }
+    if (updates.pay_rent_on !== undefined) {
+        updateData.pay_rent_on = updates.pay_rent_on;
+    }
+    if (updates.vehicle_plate !== undefined) {
+        updateData.vehicle_plate = updates.vehicle_plate;
+    }
+    if (updates.assets !== undefined) {
+        updateData.assets = updates.assets;
+    }
+    
+    const data = await apiClient.put<any>(`/leases/${id}`, updateData);
+    return data;
 };
 
 export const getDashboardStats = async () => {
