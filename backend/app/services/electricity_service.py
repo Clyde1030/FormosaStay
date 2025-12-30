@@ -199,7 +199,7 @@ class ElectricityService:
             "due_date": period_end,  # Default due_date to period_end
             "due_amount": bill_amount,
             "paid_amount": Decimal(0),
-            "status": "unpaid",
+            "status": "overdue",
             "created_by": created_by,
         }
 

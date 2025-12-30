@@ -50,7 +50,7 @@ class InvoiceTransactionCreate(BaseModel):
     due_date: date = Field(..., description="Due date")
     period_start: Optional[date] = Field(None, description="Period start date (for rent/electricity)")
     period_end: Optional[date] = Field(None, description="Period end date (for rent/electricity)")
-    status: str = Field(default="paid", description="Invoice status: 'paid', 'unpaid', 'partial', 'uncollectable', 'returned', 'canceled'")
+    status: str = Field(default="paid", description="Invoice status: 'paid', 'overdue', 'partial', 'uncollectable', 'returned', 'canceled'")
     paid_date: Optional[date] = Field(None, description="Paid date (if status is 'paid')")
     payment_method: Optional[str] = Field(None, description="Payment method: 'bank', 'cash', 'LINE_Pay', 'other'")
     note: Optional[str] = Field(None, description="Optional note")

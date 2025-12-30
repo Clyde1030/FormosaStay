@@ -14,7 +14,7 @@ CREATE TYPE payment_term_type AS ENUM ('annual','semi-annual','seasonal','monthl
 CREATE TYPE lease_amendment_type AS ENUM ('rent_change', 'discount', 'other');
 CREATE TYPE discount_type AS ENUM ('free_months','fixed_amount','percentage');
 CREATE TYPE tenant_role_type AS ENUM ('primary','secondary');
-CREATE TYPE payment_status AS ENUM ('unpaid','paid','partial','uncollectable','returned','canceled');
+CREATE TYPE payment_status AS ENUM ('unmatured','overdue','paid','partial','uncollectable','returned','canceled');
 CREATE TYPE invoice_category AS ENUM ('rent','electricity', 'penalty', 'deposit');
 CREATE TYPE adjustment_source_type AS ENUM ('promotion','manual','penalty');
 CREATE TYPE cash_direction_type AS ENUM ('in','out','transfer');
@@ -67,7 +67,10 @@ CREATE TABLE employee (
     email TEXT NOT NULL,
     phone TEXT NOT NULL,
 
-    CONSTRAINT uq_employee UNIQUE (email)    
+    CONSTRAINT pk_employee PRIMARY KEY (id),
+    CONSTRAINT uq_employee UNIQUE (email),
+    CONSTRAINT fk_employee_role
+        FOREIGN KEY (role_id) REFERENCES role(id)
 );
 
 
@@ -198,6 +201,9 @@ CREATE TABLE lease (
 );
 
 -- lease_amendment does NOT modify lease values directly
+-- lease to lease_amendment is one-to-many relationship
+-- Consider labeling each amendment for each lease with numbers starting from 1
+-- amendment_no
 CREATE TABLE lease_amendment (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     lease_id BIGINT NOT NULL,
@@ -272,7 +278,6 @@ CREATE TABLE invoice (
     category invoice_category NOT NULL,
     period_start DATE NOT NULL,
     period_end DATE NOT NULL,
-    due_date DATE NOT NULL,
     due_amount NUMERIC(10,2) NOT NULL,
     paid_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
     payment_status payment_status NOT NULL,
@@ -296,6 +301,9 @@ CREATE TABLE invoice (
         FOREIGN KEY (updated_by) REFERENCES user_account(id)
 );
 
+-- Invoice to Invoice Adjustment is one-to-many relationship
+-- Consider labeling each adjustment for each invoice with numbers starting from 1
+-- adjustment_no
 CREATE TABLE invoice_adjustment (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     invoice_id BIGINT NOT NULL,

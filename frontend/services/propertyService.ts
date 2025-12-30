@@ -81,9 +81,9 @@ export const getTransactions = async (): Promise<Transaction[]> => {
             amount: Number(p.amount) || 0,
             dueDate: p.due_date || '',
             status: p.status === 'paid' ? 'Paid' :
-                    p.status === 'unpaid' ? 'Unpaid' :
-                    p.status === 'partial' ? 'Unpaid' : 
-                    p.status === 'uncollectable' ? 'Overdue' : 'Unpaid',
+                    p.status === 'overdue' ? 'Overdue' :
+                    p.status === 'partial' ? 'Overdue' : 
+                    p.status === 'uncollectable' ? 'Overdue' : 'Overdue',
             paidDate: p.paid_date || (p.status === 'paid' ? p.due_date : undefined),
             method: p.payment_method === 'bank' ? 'Transfer' :
                     p.payment_method === 'cash' ? 'Cash' :
@@ -114,8 +114,8 @@ export const getTransactionsByRoom = async (roomId: any): Promise<Transaction[]>
             amount: Number(p.due_amount) || 0,
             dueDate: p.due_date || '',
             status: p.payment_status_en === 'Paid' ? 'Paid' :
-                    p.payment_status_en === 'Unpaid' ? 'Unpaid' :
-                    p.payment_status_en === 'Partial' ? 'Unpaid' : 'Unpaid',
+                    p.payment_status_en === 'Overdue' ? 'Overdue' :
+                    p.payment_status_en === 'Partial' ? 'Overdue' : 'Overdue',
             paidDate: p.payment_status_en === 'Paid' ? p.due_date : undefined,
             periodStart: p.period_start || '',
             periodEnd: p.period_end || '',
@@ -372,7 +372,7 @@ export const addTransaction = async (tx: Partial<Transaction>) => {
             category: invoiceCategoryMap[tx.type || 'Rent'] || 'rent',
             amount: tx.amount || 0,
             due_date: tx.dueDate || new Date().toISOString().split('T')[0],
-            status: tx.status === 'Paid' ? 'paid' : 'unpaid',
+            status: tx.status === 'Paid' ? 'paid' : 'overdue',
             period_start: tx.periodStart,
             period_end: tx.periodEnd,
             note: tx.note
@@ -436,7 +436,7 @@ export const updateTransaction = async (id: string, updates: Partial<Transaction
         if (updates.status) {
             const statusMap: { [key: string]: string } = {
                 'Paid': 'paid',
-                'Unpaid': 'unpaid',
+                'Overdue': 'overdue',
                 'Overdue': 'uncollectable'
             };
             updateData.status = statusMap[updates.status] || updates.status;

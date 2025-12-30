@@ -43,7 +43,7 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
                 select(
                     func.sum(Invoice.due_amount - Invoice.paid_amount).label("total_overdue"),
                     func.count(Invoice.id).label("count")
-                ).where(Invoice.status.in_(["unpaid", "partial"])).where(Invoice.deleted_at.is_(None))
+                ).where(Invoice.status.in_(["overdue", "partial"])).where(Invoice.deleted_at.is_(None))
             )
             overdue_data = invoices_result.first()
             overdue_total = float(overdue_data.total_overdue) if overdue_data and overdue_data.total_overdue else 0

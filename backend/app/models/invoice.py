@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship
 
 # Define ENUM types
 invoice_category_type = ENUM('rent', 'electricity', 'penalty', 'deposit', name='invoice_category', create_type=False)
-payment_status_type = ENUM('unpaid', 'paid', 'partial', 'uncollectable', 'returned', 'canceled', name='payment_status', create_type=False)
+payment_status_type = ENUM('overdue', 'paid', 'partial', 'uncollectable', 'returned', 'canceled', name='payment_status', create_type=False)
 
 
 class Invoice(Base, AuditMixin):
@@ -20,7 +20,7 @@ class Invoice(Base, AuditMixin):
     due_date = Column(Date, nullable=False)
     due_amount = Column(Numeric(10, 2), nullable=False)
     paid_amount = Column(Numeric(10, 2), nullable=False, default=0)
-    status = Column(payment_status_type, nullable=False)  # 'unpaid', 'paid', 'partial', 'uncollectable', 'returned', 'canceled'
+    status = Column(payment_status_type, nullable=False)  # 'overdue', 'paid', 'partial', 'uncollectable', 'returned', 'canceled'
 
     # Relationships
     lease = relationship("Lease", back_populates="invoices")

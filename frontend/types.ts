@@ -124,7 +124,7 @@ export interface TenantWithContract extends TenantWithLease {
 // Invoice category - using English values to match database
 export type InvoiceCategory = 'rent' | 'electricity' | 'penalty' | 'deposit';
 // Invoice status - using English values to match database
-export type InvoiceStatus = 'unpaid' | 'paid' | 'partial' | 'uncollectable' | 'returned' | 'canceled';
+export type InvoiceStatus = 'overdue' | 'paid' | 'partial' | 'uncollectable' | 'returned' | 'canceled';
 
 export interface Invoice {
     id: number;
@@ -152,7 +152,7 @@ export interface Transaction {
     type: 'Rent' | 'Deposit' | 'Electricity' | 'Fee' | 'MachineIncome';
     amount: number;
     dueDate: string;
-    status: 'Paid' | 'Overdue' | 'Unpaid' | string;
+    status: 'Paid' | 'Overdue' | string;
     paidDate?: string;
     method?: 'Transfer' | 'Cash' | 'LinePay' | string;
     note?: string;

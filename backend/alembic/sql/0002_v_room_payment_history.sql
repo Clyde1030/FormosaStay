@@ -36,7 +36,7 @@ SELECT
     -- Payment Status Details (cast to TEXT to avoid enum conflict)
     CASE 
         WHEN inv.payment_status = 'paid' THEN 'Paid'::TEXT
-        WHEN inv.payment_status = 'unpaid' THEN 'Unpaid'::TEXT
+        WHEN inv.payment_status = 'overdue' THEN 'Overdue'::TEXT
         WHEN inv.payment_status = 'partial' THEN 'Partial'::TEXT
         WHEN inv.payment_status = 'uncollectable' THEN 'Bad Debt'::TEXT
         WHEN inv.payment_status = 'returned' THEN 'Returned'::TEXT

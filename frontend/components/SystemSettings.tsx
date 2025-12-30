@@ -181,7 +181,7 @@ CREATE TABLE payment (
 
     due_amount NUMERIC(10,2) NOT NULL,
     paid_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
-    status TEXT NOT NULL CHECK (status IN ('unpaid','paid','partial','bad_debt')),
+    status TEXT NOT NULL CHECK (status IN ('overdue','paid','partial','bad_debt')),
 
     created_by BIGINT REFERENCES user_account(id),
     updated_by BIGINT REFERENCES user_account(id),

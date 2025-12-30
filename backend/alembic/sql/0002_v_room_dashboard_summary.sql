@@ -64,7 +64,7 @@ SELECT
         (SELECT COUNT(*) 
          FROM invoice inv 
          WHERE inv.lease_id = l.id 
-         AND inv.payment_status = 'unpaid'
+         AND inv.payment_status = 'overdue'
          AND inv.deleted_at IS NULL),
         0
     ) AS unpaid_invoices,
