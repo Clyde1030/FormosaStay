@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Loader2, Plus, Trash2 } from 'lucide-react';
 import { createTenant } from '../services/propertyService';
-import { EmergencyContact } from '../types';
+import { EmergencyContact, Gender, GenderFromChinese, GenderLabels } from '../types';
 
 interface Props {
     onClose: () => void;
@@ -12,7 +12,7 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
     const [formData, setFormData] = useState({
         first_name: '',
         last_name: '',
-        gender: '男',
+        gender: Gender.MALE,
         birthday: '',
         personal_id: '',
         phone: '',
@@ -30,18 +30,11 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         setIsSubmitting(true);
 
         try {
-            // Map Chinese gender values to backend expected values
-            const genderMap: Record<string, string> = {
-                '男': 'M',
-                '女': 'F',
-                '其他': 'O'
-            };
-            
             // Map form data to backend schema
             const tenantData = {
                 first_name: formData.first_name.trim(),
                 last_name: formData.last_name.trim(),
-                gender: genderMap[formData.gender] || formData.gender,
+                gender: formData.gender, // Already in English enum format
                 birthday: formData.birthday,
                 personal_id: formData.personal_id.trim(),
                 phone: formData.phone.trim(),
@@ -119,11 +112,11 @@ const NewTenantModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                                 required 
                                 className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-brand-500 outline-none" 
                                 value={formData.gender} 
-                                onChange={e => setFormData({...formData, gender: e.target.value})}
+                                onChange={e => setFormData({...formData, gender: e.target.value as Gender})}
                             >
-                                <option value="男">男</option>
-                                <option value="女">女</option>
-                                <option value="其他">其他</option>
+                                <option value={Gender.MALE}>{GenderLabels[Gender.MALE]}</option>
+                                <option value={Gender.FEMALE}>{GenderLabels[Gender.FEMALE]}</option>
+                                <option value={Gender.OTHER}>{GenderLabels[Gender.OTHER]}</option>
                             </select>
                         </div>
                         <div>

@@ -6,7 +6,6 @@ export enum PaymentFrequency {
     SEMIANNUALLY = 'semi-annual',
     YEARLY = 'annual'
 }
-
 // Display labels for payment frequency (Chinese for UI)
 export const PaymentFrequencyLabels: Record<PaymentFrequency, string> = {
     [PaymentFrequency.MONTHLY]: '月繳',
@@ -15,19 +14,22 @@ export const PaymentFrequencyLabels: Record<PaymentFrequency, string> = {
     [PaymentFrequency.YEARLY]: '年繳'
 }
 
+
+
 // Lease asset types - using English values to match database
 export enum LeaseAssetType {
     KEY = 'key',
     FOB = 'fob',
     CONTROLLER = 'controller'
 }
-
 // Display labels for lease asset types (Chinese for UI)
 export const LeaseAssetTypeLabels: Record<LeaseAssetType, string> = {
     [LeaseAssetType.KEY]: '鑰匙',
     [LeaseAssetType.FOB]: '磁扣',
     [LeaseAssetType.CONTROLLER]: '遙控器'
 }
+
+
 
 // Lease status - using English values to match database
 export enum LeaseStatus {
@@ -36,7 +38,6 @@ export enum LeaseStatus {
     TERMINATED = 'terminated',
     EXPIRED = 'expired'
 }
-
 // Added for component compatibility - display labels
 export enum ContractStatus {
     DRAFT = 'draft',
@@ -45,13 +46,31 @@ export enum ContractStatus {
     TERMINATED = 'terminated',
     EXPIRED = 'expired'
 }
+// Display labels for lease asset types (Chinese for UI)
+export const ContractStatusLabels: Record<ContractStatus, string> = {
+    [ContractStatus.DRAFT]: '草稿',
+    [ContractStatus.PENDING]: '待審核',
+    [ContractStatus.ACTIVE]: '生效',
+    [ContractStatus.TERMINATED]: '終止',
+    [ContractStatus.EXPIRED]: '過期'
+}
+
+
 
 // Added for component compatibility - display labels
 export enum DepositStatus {
-    PAID = '已交',
-    UNPAID = '未交',
-    PARTIAL = '部分未交'
+    PAID = 'paid',
+    UNPAID = 'unpaid',
+    PARTIAL = 'partial'
 }
+// Display labels for deposit status (Chinese for UI)
+export const DepositStatusLabels: Record<DepositStatus, string> = {
+    [DepositStatus.PAID]: '已交',
+    [DepositStatus.UNPAID]: '未交',
+    [DepositStatus.PARTIAL]: '部分未交'
+}
+
+
 
 export interface Building {
     id: number;
@@ -242,4 +261,68 @@ export interface CashFlowCategory {
     chinese_name: string;
     direction: 'in' | 'out' | 'transfer';
     category_group?: string;
+}
+
+// --- English-Chinese Mappings ---
+
+// Gender mappings
+export enum Gender {
+    MALE = 'M',
+    FEMALE = 'F',
+    OTHER = 'O'
+}
+export const GenderLabels: Record<Gender, string> = {
+    [Gender.MALE]: 'Male',
+    [Gender.FEMALE]: 'Female',
+    [Gender.OTHER]: 'Other'
+}
+export const GenderChineseLabels: Record<Gender, string> = {
+    [Gender.MALE]: '男',
+    [Gender.FEMALE]: '女',
+    [Gender.OTHER]: '其他'
+}
+// Reverse mapping: Chinese to English
+export const GenderFromChinese: Record<string, Gender> = {
+    '男': Gender.MALE,
+    '女': Gender.FEMALE,
+    '其他': Gender.OTHER
+}
+
+// Tenant role mappings
+export enum TenantRole {
+    PRIMARY = 'primary',
+    CO_TENANT = 'co_tenant'
+}
+export const TenantRoleLabels: Record<TenantRole, string> = {
+    [TenantRole.PRIMARY]: 'Primary',
+    [TenantRole.CO_TENANT]: 'Co-Tenant'
+}
+export const TenantRoleChineseLabels: Record<TenantRole, string> = {
+    [TenantRole.PRIMARY]: '主要',
+    [TenantRole.CO_TENANT]: '共同'
+}
+// Reverse mapping: Chinese to English
+export const TenantRoleFromChinese: Record<string, TenantRole> = {
+    '主要': TenantRole.PRIMARY,
+    '共同': TenantRole.CO_TENANT
+}
+
+// Common UI label mappings
+export const UILabels = {
+    // Field labels
+    lastName: { en: 'Last Name', zh: '姓氏' },
+    firstName: { en: 'First Name', zh: '名字' },
+    relationship: { en: 'Relationship', zh: '關係' },
+    relationshipPlaceholder: { en: 'e.g., Father, Mother, Friend', zh: 'e.g., 父親, 母親, 朋友' },
+    leaseAssets: { en: 'Lease Assets', zh: '租賃物品' },
+    buildingNumber: { en: 'Building', zh: '號' },
+    floor: { en: 'Floor', zh: '樓' },
+    room: { en: 'Room', zh: '室' },
+    
+    // Error messages
+    pdfGenerationError: { en: 'An error occurred while generating PDF. Please try again later.', zh: '生成PDF時發生錯誤，請稍後再試' },
+    contractGenerationError: { en: 'Cannot generate contract: Missing required contract or room information', zh: '無法生成合約：缺少必要的合約或房間資訊' },
+    
+    // PDF filename
+    contractFilenamePrefix: { en: 'Rental_Contract', zh: '租賃契約' }
 }

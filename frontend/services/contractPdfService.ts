@@ -1,9 +1,9 @@
 import html2pdf from 'html2pdf.js';
-import { TenantWithContract } from '../types';
+import { TenantWithContract, UILabels } from '../types';
 
 // Landlord information (from the contract template)
 const LANDLORD_INFO = {
-    name: '信宇',
+    name: '信毅',
     address: '後壁區新嘉里白沙屯 120號之12',
     phone: '0921631690',
     manager: '楊月香'
@@ -285,7 +285,7 @@ const createContractHTML = (tenant: TenantWithContract): string => {
 
 export const generateContractPDF = async (tenant: TenantWithContract): Promise<void> => {
     if (!tenant.currentContract || !tenant.room || !tenant.building) {
-        alert('無法生成合約：缺少必要的合約或房間資訊');
+        alert(UILabels.contractGenerationError.en);
         return;
     }
 
@@ -300,7 +300,7 @@ export const generateContractPDF = async (tenant: TenantWithContract): Promise<v
         // Configure html2pdf options
         const options = {
             margin: 0,
-            filename: `租賃契約_${tenant.last_name || ''}${tenant.first_name || ''}_${new Date().getTime()}.pdf`,
+            filename: `${UILabels.contractFilenamePrefix.en}_${tenant.last_name || ''}${tenant.first_name || ''}_${new Date().getTime()}.pdf`,
             image: { type: 'jpeg' as const, quality: 0.98 },
             html2canvas: { 
                 scale: 2,
@@ -321,6 +321,6 @@ export const generateContractPDF = async (tenant: TenantWithContract): Promise<v
         document.body.removeChild(container);
     } catch (error) {
         console.error('Error generating PDF:', error);
-        alert('生成PDF時發生錯誤，請稍後再試');
+        alert(UILabels.pdfGenerationError.en);
     }
 };

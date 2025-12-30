@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap, Loader2, Plus, Trash2, Users, FileEdit } from 'lucide-react';
-import { TenantWithContract, ContractStatus, PaymentFrequency, PaymentFrequencyLabels, DepositStatus, Contract, EmergencyContact, LeaseAssetTypeLabels, LeaseAssetType } from '../types';
+import { TenantWithContract, ContractStatus, PaymentFrequency, PaymentFrequencyLabels, DepositStatus, DepositStatusLabels, Contract, EmergencyContact, LeaseAssetTypeLabels, LeaseAssetType, Gender, GenderLabels, UILabels } from '../types';
 import { calculateProration, terminateContract, renewContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate, amendContract, submitContract } from '../services/propertyService';
 import { generateContractPDF } from '../services/contractPdfService';
 import NewContractModal from './NewContractModal';
@@ -212,7 +212,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                 first_name: editTenant.first_name || tenant.first_name || '',
                 last_name: editTenant.last_name || tenant.last_name || '',
                 // Ensure all required fields are present
-                gender: editTenant.gender || tenant.gender || '男',
+                gender: editTenant.gender || tenant.gender || Gender.MALE,
                 birthday: editTenant.birthday || tenant.birthday || '',
                 personal_id: editTenant.personal_id || editTenant.idNumber || tenant.personal_id || '',
                 phone: editTenant.phone || editTenant.phoneNumber || tenant.phone || '',
@@ -254,7 +254,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
             await generateContractPDF(tenant);
         } catch (error) {
             console.error('Error generating PDF:', error);
-            alert('生成PDF時發生錯誤，請稍後再試');
+            alert(UILabels.pdfGenerationError.en);
         }
     };
 
@@ -439,7 +439,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                                         <label className="block text-xs font-medium text-slate-600 mb-1">Relationship</label>
                                                         <input
                                                             type="text"
-                                                            placeholder="e.g., 父親, 母親, 朋友"
+                                                            placeholder={UILabels.relationshipPlaceholder.en}
                                                             className="w-full border border-slate-300 rounded-lg p-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                                                             value={contact.relationship}
                                                             onChange={e => {
@@ -645,7 +645,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                                     <div className="font-medium text-sm flex items-center gap-2">
                                                         NT$ {tenant.currentContract.depositAmount.toLocaleString()}
                                                         <span className={`text-[10px] px-1.5 py-0.5 rounded border ${tenant.currentContract.depositStatus === DepositStatus.PAID ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : 'border-red-200 text-red-700'}`}>
-                                                            {tenant.currentContract.depositStatus}
+                                                            {DepositStatusLabels[tenant.currentContract.depositStatus] || tenant.currentContract.depositStatus}
                                                         </span>
                                                     </div>
                                                 )}

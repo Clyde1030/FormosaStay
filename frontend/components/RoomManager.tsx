@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getBuildings, getRooms, getTenantInRoom, getTransactionsByRoom, getRoomElectricityHistory, getRoomTenants } from '../services/propertyService';
-import { Room, Building, TenantWithContract, Transaction, PaymentFrequencyLabels, PaymentFrequency, LeaseAssetTypeLabels, LeaseAssetType } from '../types';
+import { Room, Building, TenantWithContract, Transaction, PaymentFrequencyLabels, PaymentFrequency, LeaseAssetTypeLabels, LeaseAssetType, TenantRole, TenantRoleFromChinese } from '../types';
 import { User, Zap, DollarSign, X, ArrowRight, MapPin, Maximize, FilePlus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Area, Legend } from 'recharts';
 import TenantDetailModal from './TenantDetailModal';
@@ -178,7 +178,7 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                 <div className="p-6 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white z-10">
                     <div>
                         <h2 className="text-2xl font-bold text-slate-800">
-                            {building?.building_no}號{room?.roomNumber} Dashboard
+                            Building {building?.building_no} - Room {room?.roomNumber} Dashboard
                         </h2>
                         <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
                             <span className="flex items-center gap-1"><MapPin size={14}/> {building?.address}{room?.roomNumber}</span>
@@ -207,8 +207,14 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                             </div>
                             
                             {(() => {
-                                const primaryTenant = roomTenants.find(tt => tt.tenant_role === '主要');
-                                const coTenants = roomTenants.filter(tt => tt.tenant_role !== '主要');
+                                const primaryTenant = roomTenants.find(tt => {
+                                    const role = TenantRoleFromChinese[tt.tenant_role] || tt.tenant_role;
+                                    return role === TenantRole.PRIMARY || tt.tenant_role === '主要';
+                                });
+                                const coTenants = roomTenants.filter(tt => {
+                                    const role = TenantRoleFromChinese[tt.tenant_role] || tt.tenant_role;
+                                    return role === TenantRole.CO_TENANT || (tt.tenant_role !== '主要' && tt.tenant_role !== TenantRole.PRIMARY);
+                                });
                                 const leaseInfo = primaryTenant || roomTenants[0]; // Use primary tenant's lease info
                                 
                                 return (

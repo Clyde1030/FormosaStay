@@ -4,7 +4,7 @@ import {
     TenantWithLease, Invoice, CashFlow, 
     ElectricityRate, MeterReading, Transaction, Expense,
     TenantWithContract, Contract, PaymentFrequency, DepositStatus,
-    CashFlowCategory, CashAccount
+    CashFlowCategory, CashAccount, Gender, GenderFromChinese
 } from '../types';
 
 // --- Data Fetching ---
@@ -45,18 +45,20 @@ export const getTenants = async (): Promise<Tenant[]> => {
 
 export const fetchTenantsWithDetails = async (): Promise<TenantWithLease[]> => {
     // Get tenants from the view which already includes active lease info
+    // The API response may include active_lease, room, and building even though Tenant type doesn't have them
     const tenants = await getTenants();
     
     return tenants.map(t => {
+        const tenantData = t as any; // API response includes additional fields
         return {
             ...t,
-            active_lease: t.active_lease,
-            room: t.room || t.active_lease?.room ? {
-                ...(t.room || t.active_lease.room),
-                roomNumber: (t.room || t.active_lease?.room)?.roomNumber || 
-                           `${(t.room || t.active_lease?.room)?.floor_no}${(t.room || t.active_lease?.room)?.room_no}`
+            active_lease: tenantData.active_lease,
+            room: tenantData.room || tenantData.active_lease?.room ? {
+                ...(tenantData.room || tenantData.active_lease.room),
+                roomNumber: (tenantData.room || tenantData.active_lease?.room)?.roomNumber || 
+                           `${(tenantData.room || tenantData.active_lease?.room)?.floor_no}${(tenantData.room || tenantData.active_lease?.room)?.room_no}`
             } : undefined,
-            building: t.building || t.active_lease?.room?.building
+            building: tenantData.building || tenantData.active_lease?.room?.building
         };
     });
 };
@@ -186,6 +188,7 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
             last_name: tenantData.last_name,
             name: tenantData.tenant_name || `${tenantData.last_name}${tenantData.first_name}`,
             gender: tenantData.gender,
+            birthday: tenantData.birthday || '',
             personal_id: tenantData.personal_id,
             idNumber: tenantData.personal_id,
             phone: tenantData.phone,
@@ -198,6 +201,16 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
                 id: tenantData.lease_id,
                 tenant_id: tenantData.tenant_id,
                 room_id: tenantData.room_id,
+                // Lease base properties
+                start_date: tenantData.lease_start_date,
+                end_date: tenantData.terminated_at || tenantData.lease_end_date,
+                monthly_rent: Number(tenantData.monthly_rent) || 0,
+                deposit: Number(tenantData.deposit) || 0,
+                payment_term: tenantData.payment_term || '',
+                pay_rent_on: tenantData.pay_rent_on || 1,
+                status: tenantData.lease_status,
+                vehicle_plate: tenantData.vehicle_plate,
+                // Contract-specific properties
                 rentAmount: Number(tenantData.monthly_rent) || 0,
                 depositAmount: Number(tenantData.deposit) || 0,
                 startDate: tenantData.lease_start_date,
@@ -205,15 +218,16 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
                 paymentFrequency: tenantData.payment_term as PaymentFrequency,
                 depositStatus: DepositStatus.PAID,
                 itemsIssued: Array.isArray(tenantData.assets) ? tenantData.assets : [],
-                status: tenantData.lease_status,
-                vehicle_plate: tenantData.vehicle_plate,
-                pay_rent_on: tenantData.pay_rent_on,
                 submitted_at: tenantData.submitted_at || null
             },
             room: {
                 id: tenantData.room_id,
+                building_id: tenantData.building_id,
+                floor_no: tenantData.floor_no || 0,
+                room_no: tenantData.room_no || '',
                 roomNumber: tenantData.room_number || `${tenantData.floor_no}${tenantData.room_no}`,
-                building_id: tenantData.building_id
+                size_ping: tenantData.size_ping || 0,
+                currentMeterReading: tenantData.currentMeterReading || 0
             }
         };
     } catch (error) {
@@ -534,7 +548,7 @@ export const updateExpense = async (id: string, updates: Partial<Expense>) => {
         
         if (updates.category) {
             const categories = await getCashFlowCategories('operation');
-            const category = categories.find(c => c.name === updates.category);
+            const category = categories.find(c => c.chinese_name === updates.category);
             if (category) {
                 updateData.category_id = category.id;
             }
@@ -605,18 +619,12 @@ export const createTenant = async (tenant: Partial<Tenant>) => {
 };
 
 export const updateTenant = async (id: number, updates: Partial<Tenant>) => {
-    // Map Chinese gender values to backend expected values
-    const genderMap: Record<string, string> = {
-        '男': 'M',
-        '女': 'F',
-        '其他': 'O'
-    };
-    
     // Map frontend fields to backend schema
     // Note: first_name and last_name should always be present in the updates object
     // since they're part of the tenant object structure
-    const genderValue = updates.gender || 'M';
-    const mappedGender = genderMap[genderValue] || genderValue; // Map Chinese to English, or use as-is if already English
+    const genderValue = updates.gender || Gender.MALE;
+    // Map Chinese to English if needed, otherwise use as-is (already English enum)
+    const mappedGender = GenderFromChinese[genderValue] || genderValue;
     
     const tenantData: any = {
         first_name: updates.first_name || '',
