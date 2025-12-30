@@ -49,14 +49,14 @@ SELECT
     l.id AS lease_id,
     l.start_date AS lease_start_date,
     l.end_date AS lease_end_date,
-    l.early_termination_date,
+    l.terminated_at,
     l.monthly_rent,
     l.deposit,
     l.pay_rent_on,
     l.payment_term,
-    -- Calculate lease status: IF early_termination_date IS NOT NULL → terminated, ELSE IF CURRENT_DATE < start_date → pending, ELSE IF CURRENT_DATE BETWEEN start_date AND end_date → active, ELSE → expired
+    -- Calculate lease status: IF terminated_at IS NOT NULL → terminated, ELSE IF CURRENT_DATE < start_date → pending, ELSE IF CURRENT_DATE BETWEEN start_date AND end_date → active, ELSE → expired
     CASE 
-        WHEN l.early_termination_date IS NOT NULL THEN 'terminated'
+        WHEN l.terminated_at IS NOT NULL THEN 'terminated'
         WHEN CURRENT_DATE < l.start_date THEN 'pending'
         WHEN CURRENT_DATE BETWEEN l.start_date AND l.end_date THEN 'active'
         ELSE 'expired'
@@ -115,7 +115,7 @@ SELECT
 FROM tenant t
 LEFT JOIN lease_tenant lt ON lt.tenant_id = t.id
     AND lt.tenant_role = 'primary'  -- Primary tenant only
--- Include all leases (active and inactive) - previously filtered: AND l.early_termination_date IS NULL AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
+-- Include all leases (active and inactive) - previously filtered: AND l.terminated_at IS NULL AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
 LEFT JOIN lease l ON l.id = lt.lease_id
     AND l.deleted_at IS NULL
 LEFT JOIN room r ON r.id = l.room_id

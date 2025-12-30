@@ -69,7 +69,7 @@ SELECT
 FROM room r
 INNER JOIN meter_reading mr ON mr.room_id = r.id
 LEFT JOIN lease l ON l.room_id = r.id
-    AND mr.read_date BETWEEN l.start_date AND COALESCE(l.early_termination_date, l.end_date)
+    AND mr.read_date BETWEEN l.start_date AND COALESCE(l.terminated_at, l.end_date)
 LEFT JOIN invoice inv ON inv.lease_id = l.id 
     AND inv.category = 'electricity'
     AND mr.read_date BETWEEN inv.period_start AND inv.period_end

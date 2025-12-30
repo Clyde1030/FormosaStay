@@ -53,3 +53,25 @@ async def get_building(building_id: int, db: AsyncSession = Depends(get_db)):
         "name": f"Building {building.building_no}",
     }
 
+
+@router.get("/by-number/{building_no}", response_model=dict)
+async def get_building_by_number(building_no: int, db: AsyncSession = Depends(get_db)):
+    """Get a building by building number"""
+    result = await db.execute(select(Building).where(Building.building_no == building_no))
+    building = result.scalar_one_or_none()
+    
+    if not building:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Building with number {building_no} not found"
+        )
+    
+    return {
+        "id": building.id,
+        "building_no": building.building_no,
+        "address": building.address,
+        "name": f"Building {building.building_no}",
+        "landlord_name": building.landlord_name,
+        "landlord_address": building.landlord_address,
+    }
+

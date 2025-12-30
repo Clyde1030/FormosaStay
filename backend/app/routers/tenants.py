@@ -65,7 +65,7 @@ async def list_tenants(
                 "active_lease": {
                     "id": tenant_dict['lease_id'],
                     "start_date": str(tenant_dict['lease_start_date']) if tenant_dict['lease_start_date'] else None,
-                    "end_date": str(tenant_dict['early_termination_date']) if tenant_dict.get('early_termination_date') else (str(tenant_dict['lease_end_date']) if tenant_dict['lease_end_date'] else None),
+                    "end_date": str(tenant_dict['terminated_at']) if tenant_dict.get('terminated_at') else (str(tenant_dict['lease_end_date']) if tenant_dict['lease_end_date'] else None),
                     "monthly_rent": float(tenant_dict['monthly_rent']) if tenant_dict['monthly_rent'] else None,
                     "deposit": float(tenant_dict['deposit']) if tenant_dict['deposit'] else None,
                     "status": tenant_dict['lease_status'],
@@ -159,7 +159,7 @@ async def get_tenant(tenant_id: int, db: AsyncSession = Depends(get_db)):
             "active_lease": {
                 "id": tenant_dict['lease_id'],
                 "start_date": str(tenant_dict['lease_start_date']) if tenant_dict['lease_start_date'] else None,
-                "end_date": str(tenant_dict['early_termination_date']) if tenant_dict.get('early_termination_date') else (str(tenant_dict['lease_end_date']) if tenant_dict['lease_end_date'] else None),
+                "end_date": str(tenant_dict['terminated_at']) if tenant_dict.get('terminated_at') else (str(tenant_dict['lease_end_date']) if tenant_dict['lease_end_date'] else None),
                 "monthly_rent": float(tenant_dict['monthly_rent']) if tenant_dict['monthly_rent'] else None,
                 "deposit": float(tenant_dict['deposit']) if tenant_dict['deposit'] else None,
                 "status": tenant_dict['lease_status'],
@@ -307,7 +307,7 @@ async def update_tenant(
         "active_lease": {
             "id": active_lease.id,
             "start_date": str(active_lease.start_date),
-            "end_date": str(active_lease.early_termination_date) if active_lease.early_termination_date else str(active_lease.end_date),
+            "end_date": str(active_lease.terminated_at) if active_lease.terminated_at else str(active_lease.end_date),
             "monthly_rent": float(active_lease.monthly_rent),
             "deposit": float(active_lease.deposit),
             "status": active_lease.status,

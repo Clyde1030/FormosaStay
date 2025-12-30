@@ -173,7 +173,7 @@ async def create_invoice_transaction(
                 select(Lease).where(
                     and_(
                         Lease.room_id == invoice.room_id,
-                        Lease.early_termination_date.is_(None),
+                        Lease.terminated_at.is_(None),
                         Lease.start_date <= func.current_date(),
                         Lease.end_date >= func.current_date()
                     )

@@ -2,18 +2,113 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from sqlalchemy.orm import selectinload
-from typing import Optional
-from datetime import date
+from typing import Optional, Literal
+from datetime import date, datetime
 
-from app.models.lease import Lease, LeaseTenant
+from app.models.lease import Lease, LeaseTenant, LeaseAmendment
 from app.models.room import Room
 from app.models.tenant import Tenant
 from app.models.invoice import Invoice
+from app.models.cash_flow import CashFlow
 from app.schemas.lease import LeaseCreate, LeaseRenew, LeaseTerminate
 from app.services.electricity_service import ElectricityService
 from app.services.tenant_service import TenantService
+from app.exceptions import LeaseNotEditableError, LeaseAmendmentError
 from fastapi import HTTPException, status as http_status
 from decimal import Decimal
+
+
+# Type alias for lease status
+LeaseStatus = Literal["draft", "pending", "active", "expired", "terminated"]
+
+
+def determine_lease_status(lease: Lease, today: Optional[date] = None) -> LeaseStatus:
+    """
+    Determine lease status from facts.
+    
+    Rules:
+    - terminated: lease.terminated_at IS NOT NULL
+    - expired: today > lease.end_date AND terminated_at IS NULL
+    - pending: today < lease.start_date AND lease.submitted_at IS NOT NULL
+    - draft: today < lease.start_date AND lease.submitted_at IS NULL
+    - active: today >= lease.start_date AND today <= lease.end_date AND terminated_at IS NULL
+    """
+    if today is None:
+        today = date.today()
+    
+    terminated_at = lease.terminated_at
+    
+    if terminated_at is not None:
+        return "terminated"
+    elif today > lease.end_date:
+        return "expired"
+    elif today < lease.start_date:
+        if lease.submitted_at is not None:
+            return "pending"
+        else:
+            return "draft"
+    else:  # today >= start_date AND today <= end_date
+        return "active"
+
+
+async def assert_lease_editable(
+    db: AsyncSession,
+    lease: Lease,
+    today: Optional[date] = None
+) -> None:
+    """
+    Assert that a lease is editable.
+    
+    A lease is freely editable ONLY if:
+    - status IN (draft, pending)
+    - no invoices exist for the lease
+    - no cashflows exist for the lease
+    
+    Raises LeaseNotEditableError if lease cannot be edited.
+    """
+    if today is None:
+        today = date.today()
+    
+    status = determine_lease_status(lease, today)
+    
+    if status not in ("draft", "pending"):
+        raise LeaseNotEditableError(
+            f"Cannot edit lease with status '{status}'. Only draft and pending leases can be edited."
+        )
+    
+    # Check for invoices
+    invoice_count = await db.execute(
+        select(func.count(Invoice.id)).where(
+            and_(
+                Invoice.lease_id == lease.id,
+                Invoice.deleted_at.is_(None)
+            )
+        )
+    )
+    invoice_count = invoice_count.scalar() or 0
+    
+    if invoice_count > 0:
+        raise LeaseNotEditableError(
+            f"Cannot edit lease: {invoice_count} invoice(s) exist for this lease. "
+            "Financial history must remain immutable."
+        )
+    
+    # Check for cashflows
+    cashflow_count = await db.execute(
+        select(func.count(CashFlow.id)).where(
+            and_(
+                CashFlow.lease_id == lease.id,
+                CashFlow.deleted_at.is_(None)
+            )
+        )
+    )
+    cashflow_count = cashflow_count.scalar() or 0
+    
+    if cashflow_count > 0:
+        raise LeaseNotEditableError(
+            f"Cannot edit lease: {cashflow_count} cashflow(s) exist for this lease. "
+            "Financial history must remain immutable."
+        )
 
 
 class LeaseService:
@@ -81,13 +176,13 @@ class LeaseService:
         tenant_name = f"{tenant.first_name} {tenant.last_name}"
         tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
 
-        # Check if room already has an active lease (early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
+        # Check if room already has an active lease (terminated_at IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
         existing_lease_result = await db.execute(
             select(Lease)
             .where(
                 and_(
                     Lease.room_id == lease_data.room_id,
-                    Lease.early_termination_date.is_(None),
+                    Lease.terminated_at.is_(None),
                     Lease.start_date <= func.current_date(),
                     Lease.end_date >= func.current_date(),
                     Lease.deleted_at.is_(None)
@@ -197,7 +292,7 @@ class LeaseService:
             )
 
         # Get primary tenant for info messages
-        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
+        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
         if primary_tenant_relation:
             tenant = primary_tenant_relation.tenant
             tenant_name = f"{tenant.first_name} {tenant.last_name}"
@@ -205,9 +300,9 @@ class LeaseService:
         else:
             tenant_info = f"Lease ID: {lease_id}"
 
-        # Check if lease is active (early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
-        if lease.get_status() != 'active':
-            current_status = lease.get_status()
+        # Check if lease is active
+        current_status = determine_lease_status(lease)
+        if current_status != 'active':
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot renew lease with status '{current_status}'. Only active leases can be renewed. {tenant_info}"
@@ -251,7 +346,7 @@ class LeaseService:
         Business rules:
         - Lease must exist and be active
         - Termination date should be between start_date and end_date (or after end_date for expired leases)
-        - Sets status to '終止' and records early_termination_date
+        - Sets status to '終止' and records terminated_at
         - If meter_reading is provided, calculates prorated electricity bill and creates payment record
         """
         # Get the lease with room relationship
@@ -272,7 +367,7 @@ class LeaseService:
             )
 
         # Get primary tenant for info messages
-        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == '主要'), None)
+        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
         if primary_tenant_relation:
             tenant = primary_tenant_relation.tenant
             tenant_name = f"{tenant.first_name} {tenant.last_name}"
@@ -280,12 +375,12 @@ class LeaseService:
         else:
             tenant_info = f"Lease ID: {lease_id}"
 
-        # Check if lease is active (early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
-        if lease.get_status() != 'active':
-            current_status = lease.get_status()
+        # Check if lease can be terminated (must be active or pending)
+        current_status = determine_lease_status(lease)
+        if current_status not in ("active", "pending"):
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot terminate lease with status '{current_status}'. Only active leases can be terminated. {tenant_info}"
+                detail=f"Cannot terminate lease with status '{current_status}'. Only active or pending leases can be terminated. {tenant_info}"
             )
 
         # Validate termination date
@@ -343,13 +438,190 @@ class LeaseService:
                     detail=f"Error calculating electricity bill: {str(e)}. {tenant_info}"
                 ) from e
 
-        # Update lease: set early_termination_date (status will be calculated as "終止")
-        lease.early_termination_date = terminate_data.termination_date
+        # Cancel all future invoices (invoices with period_start > termination_date)
+        future_invoices = await db.execute(
+            select(Invoice).where(
+                and_(
+                    Invoice.lease_id == lease.id,
+                    Invoice.period_start > terminate_data.termination_date,
+                    Invoice.deleted_at.is_(None)
+                )
+            )
+        )
+        for invoice in future_invoices.scalars().all():
+            invoice.payment_status = "canceled"
+            invoice.updated_by = updated_by
+        
+        # Update lease: set terminated_at and termination_reason
+        lease.terminated_at = terminate_data.termination_date
+        lease.termination_reason = terminate_data.reason
         lease.updated_by = updated_by
 
         await db.commit()
         await db.refresh(lease)
         return lease
+
+    @staticmethod
+    async def update_lease(
+        db: AsyncSession,
+        lease_id: int,
+        lease_data: dict,
+        updated_by: Optional[int] = None
+    ) -> Lease:
+        """
+        Update a draft or pending lease.
+        
+        Business rules:
+        - Lease must be editable (draft or pending, no invoices, no cashflows)
+        - Only editable fields can be updated
+        """
+        # Get the lease
+        result = await db.execute(
+            select(Lease)
+            .where(Lease.id == lease_id)
+            .options(
+                selectinload(Lease.tenants).selectinload(LeaseTenant.tenant),
+                selectinload(Lease.room)
+            )
+        )
+        lease = result.scalar_one_or_none()
+        
+        if not lease:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Lease with id {lease_id} not found"
+            )
+        
+        # Assert lease is editable
+        await assert_lease_editable(db, lease)
+        
+        # Update allowed fields
+        allowed_fields = {
+            "start_date", "end_date", "monthly_rent", "deposit",
+            "pay_rent_on", "payment_term", "vehicle_plate", "assets"
+        }
+        
+        for field, value in lease_data.items():
+            if field in allowed_fields:
+                setattr(lease, field, value)
+        
+        lease.updated_by = updated_by
+        await db.commit()
+        await db.refresh(lease)
+        return lease
+
+    @staticmethod
+    async def submit_lease(
+        db: AsyncSession,
+        lease_id: int,
+        updated_by: Optional[int] = None
+    ) -> Lease:
+        """
+        Submit a draft lease (moves it to pending status).
+        
+        Business rules:
+        - Lease must be in draft status
+        - Sets submitted_at timestamp
+        """
+        # Get the lease
+        result = await db.execute(
+            select(Lease)
+            .where(Lease.id == lease_id)
+            .options(
+                selectinload(Lease.tenants).selectinload(LeaseTenant.tenant),
+                selectinload(Lease.room)
+            )
+        )
+        lease = result.scalar_one_or_none()
+        
+        if not lease:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Lease with id {lease_id} not found"
+            )
+        
+        # Check status is draft
+        current_status = determine_lease_status(lease)
+        if current_status != "draft":
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot submit lease with status '{current_status}'. Only draft leases can be submitted."
+            )
+        
+        # Set submitted_at
+        lease.submitted_at = datetime.now()
+        lease.updated_by = updated_by
+        await db.commit()
+        await db.refresh(lease)
+        return lease
+
+    @staticmethod
+    async def create_amendment(
+        db: AsyncSession,
+        lease_id: int,
+        effective_date: date,
+        old_rent: Optional[Decimal],
+        new_rent: Optional[Decimal],
+        reason: str,
+        created_by: Optional[int] = None
+    ) -> LeaseAmendment:
+        """
+        Create a lease amendment for an active lease.
+        
+        Business rules:
+        - Lease status MUST be active
+        - amendment.effective_date MUST be in the future
+        - Records old_rent and new_rent
+        """
+        # Get the lease
+        result = await db.execute(
+            select(Lease)
+            .where(Lease.id == lease_id)
+            .options(selectinload(Lease.room))
+        )
+        lease = result.scalar_one_or_none()
+        
+        if not lease:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Lease with id {lease_id} not found"
+            )
+        
+        # Check lease status is active
+        current_status = determine_lease_status(lease)
+        if current_status != "active":
+            raise LeaseAmendmentError(
+                f"Cannot create amendment for lease with status '{current_status}'. Only active leases can be amended."
+            )
+        
+        # Validate effective_date is in the future
+        today = date.today()
+        if effective_date <= today:
+            raise LeaseAmendmentError(
+                f"Amendment effective_date ({effective_date}) must be in the future."
+            )
+        
+        # Validate rent values
+        if old_rent is None or new_rent is None:
+            raise LeaseAmendmentError(
+                "Both old_rent and new_rent must be provided for rent change amendments."
+            )
+        
+        # Create amendment
+        amendment = LeaseAmendment(
+            lease_id=lease_id,
+            amendment_type="rent_change",
+            effective_date=effective_date,
+            old_monthly_rent=old_rent,
+            new_monthly_rent=new_rent,
+            reason=reason,
+            created_by=created_by
+        )
+        
+        db.add(amendment)
+        await db.commit()
+        await db.refresh(amendment)
+        return amendment
 
     @staticmethod
     async def get_lease(
@@ -400,7 +672,7 @@ class LeaseService:
         
         # Filter by status if provided (status is computed, so filter in Python)
         if status:
-            leases = [l for l in leases if l.get_status() == status]
+            leases = [l for l in leases if determine_lease_status(l) == status]
         
         # Apply pagination after status filtering
         return leases[skip:skip + limit]

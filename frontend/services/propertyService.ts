@@ -200,7 +200,7 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
                 rentAmount: Number(tenantData.monthly_rent) || 0,
                 depositAmount: Number(tenantData.deposit) || 0,
                 startDate: tenantData.lease_start_date,
-                endDate: tenantData.early_termination_date || tenantData.lease_end_date,
+                endDate: tenantData.terminated_at || tenantData.lease_end_date,
                 paymentFrequency: tenantData.payment_term as PaymentFrequency,
                 depositStatus: DepositStatus.PAID,
                 itemsIssued: Array.isArray(tenantData.assets) ? tenantData.assets : [],

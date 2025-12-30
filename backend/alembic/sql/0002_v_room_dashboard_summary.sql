@@ -26,7 +26,7 @@ SELECT
         WHEN EXISTS (
             SELECT 1 FROM lease l 
             WHERE l.room_id = r.id 
-            AND l.early_termination_date IS NULL
+            AND l.terminated_at IS NULL
             AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
             AND l.deleted_at IS NULL
         ) THEN true
@@ -113,8 +113,8 @@ SELECT
 FROM room r
 INNER JOIN building b ON b.id = r.building_id
 LEFT JOIN lease l ON l.room_id = r.id 
-    -- Active lease only: no early_termination_date and CURRENT_DATE BETWEEN start_date AND end_date
-    AND l.early_termination_date IS NULL
+    -- Active lease only: no terminated_at and CURRENT_DATE BETWEEN start_date AND end_date
+    AND l.terminated_at IS NULL
     AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
     AND l.deleted_at IS NULL
 LEFT JOIN lease_tenant lt ON lt.lease_id = l.id 

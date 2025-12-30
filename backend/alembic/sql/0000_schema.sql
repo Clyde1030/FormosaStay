@@ -168,8 +168,9 @@ CREATE TABLE lease (
     room_id BIGINT NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    early_termination_date DATE,
+    terminated_at DATE,
     termination_reason TEXT,
+    submitted_at TIMESTAMPTZ,
     monthly_rent NUMERIC(10,2) NOT NULL,
     deposit NUMERIC(10,2) NOT NULL,
     pay_rent_on SMALLINT NOT NULL,
@@ -186,10 +187,10 @@ CREATE TABLE lease (
     CONSTRAINT fk_lease_room
         FOREIGN KEY (room_id) REFERENCES room(id),
     CONSTRAINT chk_lease_dates CHECK (end_date > start_date),
-    CONSTRAINT chk_early_termination
+    CONSTRAINT chk_termination
         CHECK (
-            early_termination_date IS NULL
-            OR early_termination_date BETWEEN start_date AND end_date
+            terminated_at IS NULL
+            OR terminated_at BETWEEN start_date AND end_date
         ),
     CONSTRAINT chk_monthly_rent CHECK (monthly_rent >= 0),
     CONSTRAINT chk_deposit CHECK (deposit >= 0),

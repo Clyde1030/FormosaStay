@@ -20,12 +20,12 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
         rooms_result = await db.execute(select(func.count(Room.id)))
         total_rooms = rooms_result.scalar() or 0
         
-        # Active leases (occupied rooms) - early_termination_date IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date
+        # Active leases (occupied rooms) - terminated_at IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date
         from sqlalchemy import and_
         leases_result = await db.execute(
             select(func.count(Lease.id)).where(
                 and_(
-                    Lease.early_termination_date.is_(None),
+                    Lease.terminated_at.is_(None),
                     Lease.start_date <= func.current_date(),
                     Lease.end_date >= func.current_date(),
                     Lease.deleted_at.is_(None)

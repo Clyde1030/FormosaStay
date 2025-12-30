@@ -86,7 +86,7 @@ export interface Lease {
     room_id: any;
     start_date: string;
     end_date: string;
-    early_termination_date?: string;
+    terminated_at?: string;
     monthly_rent: number;
     deposit: number;
     pay_rent_on: number;

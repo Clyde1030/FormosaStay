@@ -127,7 +127,7 @@ CREATE TABLE lease (
 
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    early_termination_date DATE,
+    terminated_at DATE,
 
     monthly_rent NUMERIC(10,2) NOT NULL,
     deposit NUMERIC(10,2) NOT NULL,

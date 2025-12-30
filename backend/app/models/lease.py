@@ -3,6 +3,7 @@ from sqlalchemy import Column, BigInteger, Date, Numeric, SmallInteger, String, 
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import relationship
 from datetime import date
+from typing import Optional
 from app.models.base import Base, AuditMixin
 
 # Define ENUM types
@@ -20,8 +21,9 @@ class Lease(Base, AuditMixin):
 
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    early_termination_date = Column(Date, nullable=True)
+    terminated_at = Column(Date, nullable=True)  # Date when lease was terminated
     termination_reason = Column(String, nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=True)  # When lease was submitted (moves from draft to pending)
 
     monthly_rent = Column(Numeric(10, 2), nullable=False)
     deposit = Column(Numeric(10, 2), nullable=False)
@@ -37,32 +39,43 @@ class Lease(Base, AuditMixin):
     cash_flows = relationship("CashFlow", back_populates="lease")
     amendments = relationship("LeaseAmendment", back_populates="lease", cascade="all, delete-orphan")
 
-    def get_status(self) -> str:
+    def get_status(self, today: Optional[date] = None) -> str:
         """
-        Calculate lease status based on business rules:
-        - IF early_termination_date IS NOT NULL → terminated
-        - ELSE IF today < start_date → pending
-        - ELSE IF today BETWEEN start_date AND end_date → active
-        - ELSE → expired
+        Calculate lease status based on business rules.
+        Status is derived from facts, not manually editable.
+        
+        Rules:
+        - terminated: terminated_at IS NOT NULL
+        - expired: today > end_date AND terminated_at IS NULL
+        - pending: today < start_date AND submitted_at IS NOT NULL
+        - draft: today < start_date AND submitted_at IS NULL
+        - active: today >= start_date AND today <= end_date AND terminated_at IS NULL
         """
-        today = date.today()
-        if self.early_termination_date is not None:
+        if today is None:
+            today = date.today()
+        
+        terminated_at = self.terminated_at
+        
+        if terminated_at is not None:
             return "terminated"
-        elif today < self.start_date:
-            return "pending"
-        elif self.start_date <= today <= self.end_date:
-            return "active"
-        else:
+        elif today > self.end_date:
             return "expired"
+        elif today < self.start_date:
+            if self.submitted_at is not None:
+                return "pending"
+            else:
+                return "draft"
+        else:  # today >= start_date AND today <= end_date
+            return "active"
 
     @property
     def status(self) -> str:
-        """Property for backward compatibility"""
+        """Property for backward compatibility - recalculates on read"""
         return self.get_status()
 
     __table_args__ = (
         CheckConstraint("end_date > start_date", name="chk_lease_dates"),
-        CheckConstraint("early_termination_date IS NULL OR (early_termination_date >= start_date AND early_termination_date <= end_date)", name="chk_early_termination"),
+        CheckConstraint("terminated_at IS NULL OR (terminated_at >= start_date AND terminated_at <= end_date)", name="chk_termination"),
         CheckConstraint("pay_rent_on BETWEEN 1 AND 31", name="chk_pay_rent_on"),
         CheckConstraint("monthly_rent >= 0", name="chk_monthly_rent"),
         CheckConstraint("deposit >= 0", name="chk_deposit"),

@@ -125,7 +125,7 @@ The following views are defined in the database:
 **Logic**:
 - A room is available if:
   - `is_rentable = TRUE`
-  - AND there is NO active lease (no lease with `early_termination_date IS NULL` and `end_date >= CURRENT_DATE`)
+  - AND there is NO active lease (no lease with `terminated_at IS NULL` and `end_date >= CURRENT_DATE`)
 
 **Columns**:
 - All columns from `room` table
@@ -144,7 +144,7 @@ The following views are defined in the database:
 **Purpose**: Calculates the current status of a lease based on business rules.
 
 **Business Rules**:
-- IF `early_termination_date IS NOT NULL` → **終止** (Terminated)
+- IF `terminated_at IS NOT NULL` → **終止** (Terminated)
 - ELSE IF `end_date < CURRENT_DATE` → **到期** (Expired)
 - ELSE → **有效** (Active)
 
@@ -176,7 +176,7 @@ The following views are defined in the database:
 **Columns**:
 - Tenant basic info: `tenant_id`, `first_name`, `last_name`, `tenant_name`, `gender`, `birthday`, `personal_id`, `phone`, `email`, `line_id`, `tenant_address`
 - Emergency contacts: `emergency_contacts` (JSONB array)
-- Lease info: `lease_id`, `lease_start_date`, `lease_end_date`, `early_termination_date`, `monthly_rent`, `deposit`, `payment_term`, `lease_status`, `vehicle_plate`, `lease_assets`
+- Lease info: `lease_id`, `lease_start_date`, `lease_end_date`, `terminated_at`, `monthly_rent`, `deposit`, `payment_term`, `lease_status`, `vehicle_plate`, `lease_assets`
 - Asset quantities: `asset_keys_quantity`, `asset_fob_quantity`, `asset_remote_quantity`
 - Room info: `room_id`, `floor_no`, `room_no`, `room_number`, `size_ping`
 - Building info: `building_id`, `building_no`, `building_address`
@@ -228,7 +228,7 @@ Frontend displays tenant list
 **Columns**:
 - Room info: `room_id`, `building_id`, `floor_no`, `room_no`, `room_number`, `building_no`, `building_address`
 - Tenant info: `tenant_id`, `first_name`, `last_name`, `tenant_name`, `gender`, `personal_id`, `phone`, `email`, `line_id`, `tenant_address`
-- Lease info: `lease_id`, `lease_start_date`, `lease_end_date`, `early_termination_date`, `monthly_rent`, `deposit`, `payment_term`, `lease_status`, `vehicle_plate`, `assets`
+- Lease info: `lease_id`, `lease_start_date`, `lease_end_date`, `terminated_at`, `monthly_rent`, `deposit`, `payment_term`, `lease_status`, `vehicle_plate`, `assets`
 - Relationship: `tenant_role`, `joined_at`
 
 **Backend Usage**:

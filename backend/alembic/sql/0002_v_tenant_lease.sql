@@ -26,7 +26,7 @@ SELECT
     l.room_id,
     l.start_date,
     l.end_date,
-    l.early_termination_date,
+    l.terminated_at,
     l.monthly_rent,
     l.deposit,
     l.pay_rent_on,

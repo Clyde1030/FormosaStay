@@ -69,6 +69,39 @@ class LeaseRenew(BaseModel):
         return v
 
 
+class LeaseUpdate(BaseModel):
+    """Schema for updating a draft or pending lease contract"""
+    start_date: Optional[date] = Field(None, description="Lease start date")
+    end_date: Optional[date] = Field(None, description="Lease end date")
+    monthly_rent: Optional[Decimal] = Field(None, gt=0, description="Monthly rent amount")
+    deposit: Optional[Decimal] = Field(None, ge=0, description="Security deposit amount")
+    pay_rent_on: Optional[int] = Field(None, ge=1, le=31, description="Day of month when rent is due (1-31)")
+    payment_term: Optional[str] = Field(None, description="Payment term")
+    vehicle_plate: Optional[str] = Field(None, description="Vehicle/motorcycle plate number")
+    assets: Optional[List[LeaseAssetCreate]] = Field(None, description="Assets associated with the lease")
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.start_date and self.end_date and self.end_date <= self.start_date:
+            raise ValueError("end_date must be after start_date")
+        return self
+
+
+class LeaseAmend(BaseModel):
+    """Schema for creating a lease amendment"""
+    effective_date: date = Field(..., description="Date when the amendment takes effect (must be in the future)")
+    old_rent: Decimal = Field(..., gt=0, description="Current monthly rent before amendment")
+    new_rent: Decimal = Field(..., gt=0, description="New monthly rent after amendment")
+    reason: str = Field(..., min_length=1, description="Reason for the amendment")
+
+    @field_validator("effective_date")
+    @classmethod
+    def validate_effective_date(cls, v: date) -> date:
+        # Note: Actual validation that it's in the future is done in the service layer
+        # This just ensures it's a valid date
+        return v
+
+
 class LeaseTerminate(BaseModel):
     """Schema for terminating a lease contract"""
     termination_date: date = Field(..., description="Date when the lease is terminated")
@@ -101,18 +134,35 @@ class LeaseTenantResponse(BaseModel):
         from_attributes = True
 
 
+class LeaseAmendmentResponse(BaseModel):
+    """Schema for lease amendment response"""
+    id: int
+    lease_id: int
+    amendment_type: str
+    effective_date: date
+    old_monthly_rent: Optional[Decimal]
+    new_monthly_rent: Optional[Decimal]
+    reason: str
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
 class LeaseResponse(BaseModel):
     """Schema for lease response"""
     id: int
     room_id: int
     start_date: date
     end_date: date
-    early_termination_date: Optional[date]
+    terminated_at: Optional[date] = None
+    termination_reason: Optional[str] = None
+    submitted_at: Optional[str] = None
     monthly_rent: Decimal
     deposit: Decimal
     pay_rent_on: int
     payment_term: str  # '年繳', '半年繳', '季繳', '月繳'
-    status: str  # '有效', '終止', '到期'
+    status: str  # 'draft', 'pending', 'active', 'expired', 'terminated'
     vehicle_plate: Optional[str] = None
     assets: Optional[List[Dict[str, Any]]] = None  # JSONB array: [{"type": "鑰匙", "quantity": 1}, ...]
     tenants: List[LeaseTenantResponse] = []

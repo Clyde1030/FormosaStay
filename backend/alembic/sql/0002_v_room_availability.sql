@@ -6,7 +6,7 @@ SELECT r.*,
             SELECT 1
             FROM lease l
             WHERE l.room_id = r.id
-                AND l.early_termination_date IS NULL
+                AND l.terminated_at IS NULL
                 AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
                 AND l.deleted_at IS NULL
             )
