@@ -45,6 +45,7 @@ const calculateRentalPeriod = (startDate: string, endDate: string): string => {
 };
 
 // Get asset counts from itemsIssued array
+// Handles both English enum values ('key', 'fob', 'controller') and legacy Chinese values
 const getAssetCounts = (itemsIssued: any[]): { keys: number; cards: number; remotes: number } => {
     let keys = 0;
     let cards = 0;
@@ -61,12 +62,13 @@ const getAssetCounts = (itemsIssued: any[]): { keys: number; cards: number; remo
         const quantity = typeof item === 'object' && item !== null && 'quantity' in item
             ? item.quantity || 1
             : 1;
-            
-        if (itemText.includes('鑰匙') || itemText.includes('鑰')) {
+        
+        // Check for English enum values first (new format)
+        if (itemText === 'key' || itemText.includes('鑰匙') || itemText.includes('鑰')) {
             keys += quantity;
-        } else if (itemText.includes('磁扣') || itemText.includes('扣')) {
+        } else if (itemText === 'fob' || itemText.includes('磁扣') || itemText.includes('扣')) {
             cards += quantity;
-        } else if (itemText.includes('遙控器') || itemText.includes('遙控')) {
+        } else if (itemText === 'controller' || itemText.includes('遙控器') || itemText.includes('遙控')) {
             remotes += quantity;
         }
     });

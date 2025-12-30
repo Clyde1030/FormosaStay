@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getBuildings, getRooms, getTenantInRoom, getTransactionsByRoom, getRoomElectricityHistory, getRoomTenants } from '../services/propertyService';
-import { Room, Building, TenantWithContract, Transaction } from '../types';
+import { Room, Building, TenantWithContract, Transaction, PaymentFrequencyLabels, PaymentFrequency, LeaseAssetTypeLabels, LeaseAssetType } from '../types';
 import { User, Zap, DollarSign, X, ArrowRight, MapPin, Maximize, FilePlus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ComposedChart, Area, Legend } from 'recharts';
 import TenantDetailModal from './TenantDetailModal';
@@ -235,7 +235,11 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                                                 </div>
                                                 <div>
                                                     <label className="text-xs text-brand-600 font-bold uppercase">Payment Term</label>
-                                                    <p className="font-medium text-slate-800">{leaseInfo?.payment_term || 'N/A'}</p>
+                                                    <p className="font-medium text-slate-800">
+                                                        {leaseInfo?.payment_term 
+                                                            ? (PaymentFrequencyLabels[leaseInfo.payment_term as PaymentFrequency] || leaseInfo.payment_term)
+                                                            : 'N/A'}
+                                                    </p>
                                                 </div>
                                                 <div>
                                                     <label className="text-xs text-brand-600 font-bold uppercase">Lease Status</label>
@@ -250,9 +254,15 @@ const RoomDetailDashboard = ({ roomId, onClose }: { roomId: string, onClose: () 
                                                     <div className="flex flex-wrap gap-2 mt-1">
                                                         {Array.isArray(leaseInfo?.assets) && leaseInfo.assets.length > 0 ? (
                                                             leaseInfo.assets.map((asset: any, idx: number) => {
-                                                                const assetText = typeof asset === 'object' && asset !== null && 'type' in asset
-                                                                    ? `${asset.type} x${asset.quantity || 1}`
-                                                                    : String(asset);
+                                                                let assetText: string;
+                                                                if (typeof asset === 'object' && asset !== null && 'type' in asset) {
+                                                                    // Display Chinese label for English enum value
+                                                                    const assetType = asset.type as LeaseAssetType;
+                                                                    const label = LeaseAssetTypeLabels[assetType] || assetType;
+                                                                    assetText = `${label} x${asset.quantity || 1}`;
+                                                                } else {
+                                                                    assetText = String(asset);
+                                                                }
                                                                 return (
                                                                     <span key={idx} className="bg-white px-2 py-1 rounded text-xs border border-brand-200">
                                                                         {assetText}

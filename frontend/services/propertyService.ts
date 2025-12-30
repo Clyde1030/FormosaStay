@@ -438,8 +438,7 @@ export const updateTransaction = async (id: string, updates: Partial<Transaction
         if (updates.status) {
             const statusMap: { [key: string]: string } = {
                 'Paid': 'paid',
-                'Overdue': 'overdue',
-                'Overdue': 'uncollectable'
+                'Overdue': 'overdue'
             };
             updateData.status = statusMap[updates.status] || updates.status;
         }
@@ -805,7 +804,7 @@ export const createContract = async (contract: {
         monthly_rent: contract.monthly_rent,
         deposit: contract.deposit,
         pay_rent_on: contract.pay_rent_on,
-        payment_term: contract.payment_term, // Already in Chinese: '月繳', '季繳', '半年繳', '年繳'
+        payment_term: contract.payment_term, // English enum value: 'monthly', 'seasonal', 'semi-annual', 'annual'
     };
     
     // Only include optional fields if they have values

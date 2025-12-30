@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, Plus, Trash2 } from 'lucide-react';
 import { createContract, getTenants } from '../services/propertyService';
-import { Tenant, PaymentFrequency } from '../types';
+import { Tenant, PaymentFrequency, PaymentFrequencyLabels, LeaseAssetType, LeaseAssetTypeLabels } from '../types';
 
 interface LeaseAsset {
-    type: '鑰匙' | '磁扣' | '遙控器';
+    type: LeaseAssetType;
     quantity: number;
 }
 
@@ -197,7 +197,7 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
                                 onChange={e => setFormData({...formData, payment_term: e.target.value as PaymentFrequency})}
                             >
                                 {Object.values(PaymentFrequency).map(f => (
-                                    <option key={f} value={f}>{f}</option>
+                                    <option key={f} value={f}>{PaymentFrequencyLabels[f]}</option>
                                 ))}
                             </select>
                         </div>
@@ -220,7 +220,7 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
                             <label className="block text-sm font-medium text-slate-700">Lease Assets (租賃物品)</label>
                             <button
                                 type="button"
-                                onClick={() => setAssets([...assets, { type: '鑰匙', quantity: 1 }])}
+                                onClick={() => setAssets([...assets, { type: LeaseAssetType.KEY, quantity: 1 }])}
                                 className="flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700 font-medium transition-colors"
                             >
                                 <Plus size={16} />
@@ -249,13 +249,15 @@ const NewContractModal: React.FC<Props> = ({ roomId, tenantId, onClose, onSucces
                                             value={asset.type}
                                             onChange={e => {
                                                 const updated = [...assets];
-                                                updated[index].type = e.target.value as '鑰匙' | '磁扣' | '遙控器';
+                                                updated[index].type = e.target.value as LeaseAssetType;
                                                 setAssets(updated);
                                             }}
                                         >
-                                            <option value="鑰匙">鑰匙 (Key)</option>
-                                            <option value="磁扣">磁扣 (Fob)</option>
-                                            <option value="遙控器">遙控器 (Remote)</option>
+                                            {Object.values(LeaseAssetType).map(assetType => (
+                                                <option key={assetType} value={assetType}>
+                                                    {LeaseAssetTypeLabels[assetType]}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div>

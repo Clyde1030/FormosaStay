@@ -221,7 +221,7 @@ async def create_tenant(
         "personal_id": tenant.personal_id,
         "phone": tenant.phone,
         "email": tenant.email,
-        "address": tenant.address,
+        "address": tenant.home_address,
         "emergency_contacts": [
             {
                 "id": ec.id,
@@ -293,7 +293,7 @@ async def update_tenant(
         "phoneNumber": updated_tenant.phone,
         "email": updated_tenant.email,
         "line_id": updated_tenant.line_id,
-        "address": updated_tenant.address,
+        "address": updated_tenant.home_address,
         "emergency_contacts": [
             {
                 "id": ec.id,

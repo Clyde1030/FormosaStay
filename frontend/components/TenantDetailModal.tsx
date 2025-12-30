@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap, Loader2, Plus, Trash2, Users, FileEdit } from 'lucide-react';
-import { TenantWithContract, ContractStatus, PaymentFrequency, DepositStatus, Contract, EmergencyContact } from '../types';
+import { TenantWithContract, ContractStatus, PaymentFrequency, PaymentFrequencyLabels, DepositStatus, Contract, EmergencyContact, LeaseAssetTypeLabels, LeaseAssetType } from '../types';
 import { calculateProration, terminateContract, renewContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate, amendContract, submitContract } from '../services/propertyService';
 import { generateContractPDF } from '../services/contractPdfService';
 import NewContractModal from './NewContractModal';
@@ -103,13 +103,13 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
         try {
             const oldContract = tenant.currentContract;
             
-            // Payment term is already in Chinese format, pass through directly
+            // Payment term uses English enum values: 'monthly', 'seasonal', 'semi-annual', 'annual'
             await renewContract(tenant.currentContract.id, {
                 new_end_date: renewEndDate,
                 new_monthly_rent: renewRent,
                 new_deposit: oldContract.depositAmount,
                 new_pay_rent_on: oldContract.pay_rent_on || 1,
-                new_payment_term: renewFrequency, // Already in Chinese: '月繳', '季繳', '半年繳', '年繳'
+                new_payment_term: renewFrequency, // English enum value: 'monthly', 'seasonal', 'semi-annual', 'annual'
                 new_vehicle_plate: renewVehiclePlate.trim() || undefined
             });
             
@@ -601,11 +601,11 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                                         onChange={e => setEditContract({...editContract, paymentFrequency: e.target.value as PaymentFrequency})}
                                                     >
                                                         {Object.values(PaymentFrequency).map(f => (
-                                                            <option key={f} value={f}>{f}</option>
+                                                            <option key={f} value={f}>{PaymentFrequencyLabels[f]}</option>
                                                         ))}
                                                     </select>
                                                 ) : (
-                                                    <div className="font-medium">{tenant.currentContract.paymentFrequency}</div>
+                                                    <div className="font-medium">{PaymentFrequencyLabels[tenant.currentContract.paymentFrequency as PaymentFrequency] || tenant.currentContract.paymentFrequency}</div>
                                                 )}
                                             </div>
                                             <div>
@@ -656,9 +656,15 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                                     {tenant.currentContract.itemsIssued && Array.isArray(tenant.currentContract.itemsIssued) ? (
                                                         tenant.currentContract.itemsIssued.map((item, i) => {
                                                             // Handle both object format {type, quantity} and string format
-                                                            const itemText = typeof item === 'object' && item !== null && 'type' in item
-                                                                ? `${item.type} x${item.quantity || 1}`
-                                                                : String(item);
+                                                            let itemText: string;
+                                                            if (typeof item === 'object' && item !== null && 'type' in item) {
+                                                                // Display Chinese label for English enum value
+                                                                const assetType = item.type as LeaseAssetType;
+                                                                const label = LeaseAssetTypeLabels[assetType] || assetType;
+                                                                itemText = `${label} x${item.quantity || 1}`;
+                                                            } else {
+                                                                itemText = String(item);
+                                                            }
                                                             return (
                                                                 <span key={i} className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs border border-slate-200 flex items-center gap-1">
                                                                     <Key size={10}/> {itemText}
@@ -851,7 +857,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                     onChange={(e) => setRenewFrequency(e.target.value as PaymentFrequency)}
                                  >
                                     {Object.values(PaymentFrequency).map(f => (
-                                        <option key={f} value={f}>{f}</option>
+                                        <option key={f} value={f}>{PaymentFrequencyLabels[f]}</option>
                                     ))}
                                  </select>
                              </div>

@@ -77,7 +77,7 @@ class TenantService:
                     phone=tenant_data.phone,
                     email=tenant_data.email,
                     line_id=tenant_data.line_id,
-                    address=tenant_data.address,
+                    home_address=tenant_data.address,
                     created_by=created_by,
                 )
                 db.add(tenant)
@@ -109,7 +109,7 @@ class TenantService:
         tenant.phone = tenant_data.phone
         tenant.email = tenant_data.email
         tenant.line_id = tenant_data.line_id
-        tenant.address = tenant_data.address
+        tenant.home_address = tenant_data.address
         tenant.updated_by = created_by
         
         # Handle emergency contacts: delete existing and create new ones

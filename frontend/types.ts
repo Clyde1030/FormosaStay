@@ -1,10 +1,32 @@
 
-// Payment frequency - using Chinese values to match database
+// Payment frequency - using English values to match database enum
 export enum PaymentFrequency {
-    MONTHLY = '月繳',
-    QUARTERLY = '季繳',
-    SEMIANNUALLY = '半年繳',
-    YEARLY = '年繳'
+    MONTHLY = 'monthly',
+    QUARTERLY = 'seasonal',  // Note: backend uses 'seasonal' for quarterly
+    SEMIANNUALLY = 'semi-annual',
+    YEARLY = 'annual'
+}
+
+// Display labels for payment frequency (Chinese for UI)
+export const PaymentFrequencyLabels: Record<PaymentFrequency, string> = {
+    [PaymentFrequency.MONTHLY]: '月繳',
+    [PaymentFrequency.QUARTERLY]: '季繳',
+    [PaymentFrequency.SEMIANNUALLY]: '半年繳',
+    [PaymentFrequency.YEARLY]: '年繳'
+}
+
+// Lease asset types - using English values to match database
+export enum LeaseAssetType {
+    KEY = 'key',
+    FOB = 'fob',
+    CONTROLLER = 'controller'
+}
+
+// Display labels for lease asset types (Chinese for UI)
+export const LeaseAssetTypeLabels: Record<LeaseAssetType, string> = {
+    [LeaseAssetType.KEY]: '鑰匙',
+    [LeaseAssetType.FOB]: '磁扣',
+    [LeaseAssetType.CONTROLLER]: '遙控器'
 }
 
 // Lease status - using English values to match database
