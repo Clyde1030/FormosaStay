@@ -47,12 +47,10 @@ async def list_rooms(
         {
             "id": r.id,
             "building_id": r.building_id,
-            "buildingId": r.building_id,
             "floor_no": r.floor_no,
             "room_no": r.room_no,
-            "roomNumber": f"{r.floor_no}{r.room_no}",
+            "room_number": f"{r.floor_no}{r.room_no}",
             "size_ping": float(r.size_ping) if r.size_ping else None,
-            "sizePing": float(r.size_ping) if r.size_ping else None,
             "status": "Occupied" if r.id in active_leases else "Vacant",
             "currentMeterReading": 0,  # Would need to fetch from meter_reading
             "building": {
@@ -305,3 +303,108 @@ async def get_room_electricity(
                 detail="SQL views not found. Please run backend/app/db/views/room_dashboard_views.sql to create the views."
             )
         raise
+
+
+@router.post("/{room_id}/calculate-electricity-cost")
+async def calculate_electricity_cost(
+    room_id: int,
+    request: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Calculate electricity cost for a given final meter reading.
+    
+    This endpoint calculates the usage and cost for display/preview purposes.
+    Usage = final_reading - previous_reading
+    Cost = usage * rate_per_kwh
+    
+    Request body should contain:
+    - final_reading: float
+    - reading_date: str (YYYY-MM-DD format)
+    
+    Returns usage, rate, and calculated cost.
+    """
+    from app.services.electricity_service import ElectricityService
+    from datetime import date
+    from decimal import Decimal
+    
+    final_reading = request.get("final_reading")
+    reading_date_str = request.get("reading_date")
+    
+    if final_reading is None or reading_date_str is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing required fields: final_reading and reading_date"
+        )
+    
+    try:
+        reading_date_obj = date.fromisoformat(reading_date_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid date format: {reading_date_str}. Expected YYYY-MM-DD"
+        )
+    
+    result = await ElectricityService.calculate_electricity_cost(
+        db=db,
+        room_id=room_id,
+        final_reading=Decimal(str(final_reading)),
+        reading_date=reading_date_obj
+    )
+    
+    return result
+
+
+@router.get("/{room_id}/electricity-rate")
+async def get_electricity_rate(
+    room_id: int,
+    date: Optional[str] = Query(None, description="Date to get rate for (YYYY-MM-DD). Defaults to today if not provided."),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get the current electricity rate for a room on a specific date.
+    
+    Returns the rate that applies to the room on the given date.
+    Priority:
+    1. Room-specific rate that covers the date
+    2. Building-level rate that covers the date
+    3. Default rate (6.0) if no rate is found
+    
+    Returns the rate_per_kwh value.
+    """
+    from app.services.electricity_service import ElectricityService
+    from datetime import date as date_type
+    
+    # Use provided date or default to today
+    if date:
+        try:
+            target_date = date_type.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid date format: {date}. Expected YYYY-MM-DD"
+            )
+    else:
+        target_date = date_type.today()
+    
+    # Get rate from service
+    rate = await ElectricityService.get_electricity_rate_for_room(
+        db=db,
+        room_id=room_id,
+        target_date=target_date
+    )
+    
+    # Return default rate if none found
+    if not rate:
+        return {
+            "rate_per_kwh": 6.0,
+            "is_default": True
+        }
+    
+    return {
+        "rate_per_kwh": float(rate.rate_per_kwh),
+        "is_default": False,
+        "rate_id": rate.id,
+        "start_date": rate.start_date.isoformat() if rate.start_date else None,
+        "end_date": rate.end_date.isoformat() if rate.end_date else None
+    }

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
+from datetime import date, timedelta
 
 from app.db.session import get_db
 from app.services.lease_service import LeaseService, determine_lease_status
@@ -14,6 +15,8 @@ from app.schemas.lease import (
     LeaseAmend,
     LeaseResponse,
     LeaseAmendmentResponse,
+    ProrationCalculationRequest,
+    ProrationCalculationResponse,
 )
 from app.models.lease import Lease
 
@@ -120,9 +123,10 @@ async def update_lease(
     # current_user: User = Depends(get_current_user)
 ):
     """
-    Update a draft or pending lease.
+    Update a lease contract.
     
-    Only draft and pending leases without invoices or cashflows can be edited.
+    Tenant information (tenant_data) can be updated at any time, regardless of lease status.
+    Lease fields (start_date, end_date, monthly_rent, etc.) can only be updated when the lease is editable (draft status, no invoices, no cashflows).
     All business logic is handled in the service layer.
     """
     # Convert Pydantic model to dict, excluding None values
@@ -247,3 +251,51 @@ async def terminate_lease(
     """
     lease = await LeaseService.terminate_lease(db, lease_id, terminate_data)
     return build_lease_response(lease)
+
+
+@router.post("/{lease_id}/calculate-proration", response_model=ProrationCalculationResponse)
+async def calculate_proration(
+    lease_id: int,
+    request: ProrationCalculationRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Calculate prorated rent amount for a lease termination.
+    
+    This endpoint calculates the prorated rent based on the number of days
+    used in the termination month. The calculation follows the formula:
+    (days_used / days_in_month) * monthly_rent
+    
+    Business rules:
+    - Proration is based on the termination date's day of month
+    - Result is rounded to the nearest integer
+    """
+    # Get the lease
+    lease = await LeaseService.get_lease(db, lease_id)
+    if not lease:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"Lease with id {lease_id} not found"
+        )
+    
+    # Calculate proration
+    prorated_amount = LeaseService.calculate_proration(
+        monthly_rent=lease.monthly_rent,
+        termination_date=request.termination_date
+    )
+    
+    # Calculate days used and days in month for response
+    if request.termination_date.month == 12:
+        next_month = date(request.termination_date.year + 1, 1, 1)
+    else:
+        next_month = date(request.termination_date.year, request.termination_date.month + 1, 1)
+    last_day_of_month = next_month - timedelta(days=1)
+    days_in_month = last_day_of_month.day
+    days_used = request.termination_date.day
+    
+    return ProrationCalculationResponse(
+        prorated_amount=prorated_amount,
+        monthly_rent=lease.monthly_rent,
+        days_used=days_used,
+        days_in_month=days_in_month
+    )

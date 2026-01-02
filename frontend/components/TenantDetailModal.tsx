@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Phone, MessageCircle, Home, Calendar, CreditCard, Key, AlertTriangle, CheckCircle, FilePlus, LogOut, Printer, Edit, Save, Zap, Loader2, Plus, Trash2, Users, FileEdit } from 'lucide-react';
 import { TenantWithContract, ContractStatus, PaymentFrequency, PaymentFrequencyLabels, DepositStatus, DepositStatusLabels, Contract, EmergencyContact, LeaseAssetTypeLabels, LeaseAssetType, Gender, GenderLabels, UILabels } from '../types';
-import { calculateProration, terminateContract, renewContract, createContract, updateTenant, updateContract, recordMeterReading, getCurrentElectricityRate, amendContract, submitContract } from '../services/propertyService';
+import { calculateProration, terminateContract, renewContract, createContract, updateTenant, updateContract, recordMeterReading, amendContract, submitContract, calculateElectricityCost } from '../services/propertyService';
 import { generateContractPDF } from '../services/contractPdfService';
 import NewContractModal from './NewContractModal';
 
@@ -30,21 +30,36 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     // Final Electricity State
     const [finalReading, setFinalReading] = useState<string>('');
     const [elecCost, setElecCost] = useState<number>(0);
+    const [elecUsage, setElecUsage] = useState<number>(0);
+    const [elecRate, setElecRate] = useState<number>(5.0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    // Fixed currentRate derivation to match synchronous getCurrentElectricityRate from propertyService
-    const currentRate = tenant.room ? getCurrentElectricityRate(terminationDate, tenant.room.id) : 5.0;
 
+    // Calculate electricity cost when final reading changes
     useEffect(() => {
-        if (finalReading && tenant.room) {
-            const usage = parseFloat(finalReading) - tenant.room.currentMeterReading;
-            if (usage >= 0) {
-                setElecCost(usage * currentRate);
+        const calculateCost = async () => {
+            if (finalReading && tenant.room) {
+                try {
+                    const result = await calculateElectricityCost(tenant.room.id, {
+                        final_reading: parseFloat(finalReading),
+                        reading_date: terminationDate
+                    });
+                    setElecCost(result.cost);
+                    setElecUsage(result.usage_kwh);
+                    setElecRate(result.rate_per_kwh);
+                } catch (error) {
+                    console.error('Error calculating electricity cost:', error);
+                    setElecCost(0);
+                    setElecUsage(0);
+                    setElecRate(5.0);
+                }
             } else {
                 setElecCost(0);
+                setElecUsage(0);
             }
-        }
-    }, [finalReading, tenant.room, currentRate]);
+        };
+        calculateCost();
+    }, [finalReading, tenant.room, terminationDate]);
 
     // Initialize amend form when switching to amend view
     useEffect(() => {
@@ -58,10 +73,18 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
         }
     }, [view, tenant.currentContract]);
 
-    const handleCalculateProration = () => {
+    const handleCalculateProration = async () => {
         if (!terminationDate || !tenant.currentContract) return;
-        const amount = calculateProration(tenant.currentContract.rentAmount, terminationDate, tenant.currentContract.endDate);
-        setProrationAmount(amount);
+        
+        try {
+            const result = await calculateProration(tenant.currentContract.id, {
+                termination_date: terminationDate
+            });
+            setProrationAmount(result.prorated_amount);
+        } catch (error) {
+            console.error('Error calculating proration:', error);
+            setError('Failed to calculate proration. Please try again.');
+        }
     };
 
     const handleTerminate = async () => {
@@ -220,7 +243,9 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
             };
             
             await updateTenant(tenant.id, tenantUpdates);
-            if (tenant.currentContract && editContract) {
+            // Only update contract fields if lease status allows editing (DRAFT or PENDING)
+            if (tenant.currentContract && editContract && 
+                (tenant.currentContract.status === ContractStatus.DRAFT || tenant.currentContract.status === ContractStatus.PENDING)) {
                 // Fix: Map UI properties back to backend schema fields for updateContract
                 await updateContract(tenant.currentContract.id, {
                     ...editContract,
@@ -335,9 +360,8 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                 {!isEditing && (
                                     <button 
                                         onClick={() => setIsEditing(true)} 
-                                        disabled={tenant.currentContract?.submitted_at !== null && tenant.currentContract?.submitted_at !== undefined}
-                                        className="flex items-center gap-2 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title={tenant.currentContract?.submitted_at ? 'Contract has been submitted and cannot be edited' : 'Edit contract details'}
+                                        className="flex items-center gap-2 border border-slate-300 px-3 py-1.5 rounded-lg text-sm hover:bg-slate-50 text-slate-600"
+                                        title="Edit tenant profile information"
                                     >
                                         <Edit size={16} /> Edit Profile
                                     </button>
@@ -794,13 +818,13 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                 {elecCost > 0 && (
                                     <div className="p-3 bg-white border border-yellow-200 rounded-lg flex justify-between items-center">
                                         <div>
-                                            <p className="text-xs text-slate-500">Usage Cost @ NT${currentRate}/deg</p>
+                                            <p className="text-xs text-slate-500">Usage Cost @ NT${elecRate}/deg</p>
                                             <p className="text-sm font-bold text-slate-800">
                                                 Final Utility Bill: NT$ {elecCost.toLocaleString()}
                                             </p>
                                         </div>
                                         <div className="text-xs font-bold text-yellow-600">
-                                            {parseFloat(finalReading) - (tenant.room?.currentMeterReading || 0)} deg
+                                            {elecUsage.toFixed(1)} deg
                                         </div>
                                     </div>
                                 )}

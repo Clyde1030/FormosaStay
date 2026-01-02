@@ -105,21 +105,17 @@ export const getTransactionsByRoom = async (roomId: any): Promise<Transaction[]>
     try {
         const invoices = await apiClient.get<any[]>(`/rooms/${roomId}/invoices`);
         
+        // Backend now provides transaction_type and transaction_status with proper mappings
         return invoices.map(p => ({
             id: p.invoice_id?.toString() || '',
             roomId: roomId,
             tenantName: p.tenant_name || '',
             contractId: p.lease_id,
-            type: p.category === 'rent' ? 'Rent' : 
-                  p.category === 'electricity' ? 'Electricity' : 
-                  p.category === 'penalty' ? 'Fee' : 
-                  p.category === 'deposit' ? 'Deposit' : 'Rent',
+            type: p.transaction_type || 'Rent', // Backend provides mapped transaction type
             amount: Number(p.due_amount) || 0,
             dueDate: p.due_date || '',
-            status: p.payment_status_en === 'Paid' ? 'Paid' :
-                    p.payment_status_en === 'Overdue' ? 'Overdue' :
-                    p.payment_status_en === 'Partial' ? 'Overdue' : 'Overdue',
-            paidDate: p.payment_status_en === 'Paid' ? p.due_date : undefined,
+            status: p.transaction_status || 'Overdue', // Backend provides mapped transaction status
+            paidDate: p.transaction_status === 'Paid' ? p.due_date : undefined,
             periodStart: p.period_start || '',
             periodEnd: p.period_end || '',
             description: p.period_display || ''
@@ -623,9 +619,65 @@ export const deleteElectricityRate = async (id: string | number) => {
     throw new Error('Not implemented - backend endpoint needed');
 };
 
-export const getCurrentElectricityRate = (date: string, roomId?: any): number => {
-    // In a real app, this should be fetched from the DB state or an async call
-    return 5.0; 
+export interface ElectricityRateResponse {
+    rate_per_kwh: number;
+    is_default: boolean;
+    rate_id?: number;
+    start_date?: string;
+    end_date?: string;
+}
+
+export const getCurrentElectricityRate = async (
+    date: string,
+    roomId?: number
+): Promise<number> => {
+    // If no roomId provided, return default rate
+    if (!roomId) {
+        return 6.0;
+    }
+    
+    try {
+        const response = await apiClient.get<ElectricityRateResponse>(
+            `/rooms/${roomId}/electricity-rate`,
+            { params: { date } }
+        );
+        return response.rate_per_kwh;
+    } catch (error) {
+        console.error('Error fetching electricity rate:', error);
+        // Return default rate on error
+        return 6.0;
+    }
+};
+
+export interface ElectricityCostCalculationRequest {
+    final_reading: number;
+    reading_date: string; // YYYY-MM-DD
+}
+
+export interface ElectricityCostCalculationResponse {
+    usage_kwh: number;
+    rate_per_kwh: number;
+    cost: number;
+    previous_reading: number;
+}
+
+export const calculateElectricityCost = async (
+    roomId: number,
+    request: ElectricityCostCalculationRequest
+): Promise<ElectricityCostCalculationResponse> => {
+    try {
+        const response = await apiClient.post<ElectricityCostCalculationResponse>(
+            `/rooms/${roomId}/calculate-electricity-cost`,
+            {
+                final_reading: request.final_reading,
+                reading_date: request.reading_date
+            }
+        );
+        return response;
+    } catch (error) {
+        console.error('Error calculating electricity cost:', error);
+        throw error;
+    }
 };
 
 export const createTenant = async (tenant: Partial<Tenant>) => {
@@ -684,11 +736,33 @@ export const addCashFlow = async (flow: Omit<CashFlow, 'id'>) => {
     throw new Error('Not implemented - backend endpoint needed');
 };
 
-export const calculateProration = (rent: number, terminationDate: string, endDate: string): number => {
-    const term = new Date(terminationDate);
-    const daysInMonth = new Date(term.getFullYear(), term.getMonth() + 1, 0).getDate();
-    const daysUsed = term.getDate();
-    return Math.round((daysUsed / daysInMonth) * rent);
+export interface ProrationCalculationRequest {
+    termination_date: string; // YYYY-MM-DD
+}
+
+export interface ProrationCalculationResponse {
+    prorated_amount: number;
+    monthly_rent: number;
+    days_used: number;
+    days_in_month: number;
+}
+
+export const calculateProration = async (
+    leaseId: number,
+    request: ProrationCalculationRequest
+): Promise<ProrationCalculationResponse> => {
+    try {
+        const response = await apiClient.post<ProrationCalculationResponse>(
+            `/leases/${leaseId}/calculate-proration`,
+            {
+                termination_date: request.termination_date
+            }
+        );
+        return response;
+    } catch (error) {
+        console.error('Error calculating proration:', error);
+        throw error;
+    }
 };
 
 // --- Rent Calculation (Backend) ---

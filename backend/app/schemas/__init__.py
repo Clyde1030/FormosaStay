@@ -6,6 +6,8 @@ from app.schemas.lease import (
     LeaseResponse,
     LeaseAssetCreate,
     LeaseTenantResponse,
+    ProrationCalculationRequest,
+    ProrationCalculationResponse,
 )
 from app.schemas.tenant import (
     TenantCreate,
@@ -28,6 +30,8 @@ __all__ = [
     "LeaseResponse",
     "LeaseAssetCreate",
     "LeaseTenantResponse",
+    "ProrationCalculationRequest",
+    "ProrationCalculationResponse",
     "TenantCreate",
     "TenantResponse",
     "TenantEmergencyContactCreate",

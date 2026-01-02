@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from sqlalchemy.orm import selectinload
 from typing import Optional, Literal
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from app.models.lease import Lease, LeaseTenant, LeaseAmendment
 from app.models.room import Room
@@ -11,6 +11,7 @@ from app.models.tenant import Tenant
 from app.models.invoice import Invoice
 from app.models.cash_flow import CashFlow
 from app.schemas.lease import LeaseCreate, LeaseRenew, LeaseTerminate
+from app.schemas.tenant import TenantCreate
 from app.services.electricity_service import ElectricityService
 from app.services.tenant_service import TenantService
 from app.exceptions import LeaseNotEditableError, LeaseAmendmentError
@@ -480,11 +481,11 @@ class LeaseService:
         updated_by: Optional[int] = None
     ) -> Lease:
         """
-        Update a draft or pending lease.
+        Update a lease contract.
         
         Business rules:
-        - Lease must be editable (draft or pending, no invoices, no cashflows)
-        - Only editable fields can be updated
+        - Tenant information (tenant_data) can be updated at any time, regardless of lease status
+        - Lease fields (start_date, end_date, monthly_rent, etc.) can only be updated when lease is editable (draft status, no invoices, no cashflows)
         """
         # Get the lease
         result = await db.execute(
@@ -503,20 +504,53 @@ class LeaseService:
                 detail=f"Lease with id {lease_id} not found"
             )
         
-        # Assert lease is editable
-        await assert_lease_editable(db, lease)
+        # Separate tenant_data from lease fields (don't mutate the input dict)
+        tenant_data_dict = lease_data.get("tenant_data")
+        lease_fields = {k: v for k, v in lease_data.items() if k != "tenant_data"}
         
-        # Update allowed fields
-        allowed_fields = {
-            "start_date", "end_date", "monthly_rent", "deposit",
-            "pay_rent_on", "payment_term", "vehicle_plate", "assets"
-        }
+        # Update tenant information if provided (always allowed, regardless of lease status)
+        if tenant_data_dict:
+            # Convert dict to TenantCreate object if it's a dict (from model_dump)
+            if isinstance(tenant_data_dict, dict):
+                tenant_data = TenantCreate(**tenant_data_dict)
+            elif isinstance(tenant_data_dict, TenantCreate):
+                tenant_data = tenant_data_dict
+            else:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid tenant_data format"
+                )
+            
+            # Get primary tenant from lease
+            primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+            if not primary_tenant_relation:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail=f"Lease {lease_id} does not have a primary tenant"
+                )
+            
+            # Update tenant information (always allowed)
+            await TenantService.create_or_update_tenant(
+                db, tenant_data, tenant_id=primary_tenant_relation.tenant_id, created_by=updated_by
+            )
         
-        for field, value in lease_data.items():
-            if field in allowed_fields:
-                setattr(lease, field, value)
+        # Update lease fields if provided (only allowed when lease is editable)
+        if lease_fields:
+            # Assert lease is editable before updating lease fields
+            await assert_lease_editable(db, lease)
+            
+            # Update allowed lease fields
+            allowed_fields = {
+                "start_date", "end_date", "monthly_rent", "deposit",
+                "pay_rent_on", "payment_term", "vehicle_plate", "assets"
+            }
+            
+            for field, value in lease_fields.items():
+                if field in allowed_fields:
+                    setattr(lease, field, value)
+            
+            lease.updated_by = updated_by
         
-        lease.updated_by = updated_by
         await db.commit()
         await db.refresh(lease)
         return lease
@@ -756,4 +790,47 @@ class LeaseService:
         
         # Apply pagination after status filtering
         return leases[skip:skip + limit]
+
+    @staticmethod
+    def calculate_proration(
+        monthly_rent: Decimal,
+        termination_date: date
+    ) -> Decimal:
+        """
+        Calculate prorated rent amount for early termination.
+        
+        Business rules:
+        - Proration is based on the number of days used in the termination month
+        - Formula: (days_used / days_in_month) * monthly_rent
+        - Result is rounded to the nearest integer
+        
+        Args:
+            monthly_rent: Monthly rent amount
+            termination_date: Date when the lease is terminated
+        
+        Returns:
+            Prorated rent amount (rounded to nearest integer)
+        """
+        if monthly_rent < 0:
+            raise ValueError("monthly_rent cannot be negative")
+        
+        # Get number of days in the termination month
+        # Using calendar.monthrange would be cleaner, but this works with datetime
+        if termination_date.month == 12:
+            next_month = date(termination_date.year + 1, 1, 1)
+        else:
+            next_month = date(termination_date.year, termination_date.month + 1, 1)
+        
+        # Last day of termination month
+        last_day_of_month = next_month - timedelta(days=1)
+        days_in_month = last_day_of_month.day
+        
+        # Days used = day of month of termination date
+        days_used = termination_date.day
+        
+        # Calculate proration: (days_used / days_in_month) * monthly_rent
+        proration = (Decimal(str(days_used)) / Decimal(str(days_in_month))) * monthly_rent
+        
+        # Round to nearest integer
+        return Decimal(str(round(proration)))
 

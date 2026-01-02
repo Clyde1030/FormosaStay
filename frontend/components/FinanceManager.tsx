@@ -176,12 +176,27 @@ const ElectricityTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
     const [readings, setReadings] = useState<{[key: string]: string}>({});
     const [rateModalOpen, setRateModalOpen] = useState(false);
     const [historyRoomId, setHistoryRoomId] = useState<string | null>(null);
+    const [currentRate, setCurrentRate] = useState<number>(6.0); // Default rate
 
     useEffect(() => {
         const loadData = async () => {
             const [rs, bs] = await Promise.all([getRooms(), getBuildings()]);
             setRooms(rs);
             setBuildings(bs);
+            
+            // Get current rate (use first occupied room if available, or default)
+            if (rs.length > 0 && rs[0].status === 'Occupied') {
+                try {
+                    const rate = await getCurrentElectricityRate(
+                        new Date().toISOString().split('T')[0],
+                        rs[0].id
+                    );
+                    setCurrentRate(rate);
+                } catch (error) {
+                    console.error('Error fetching electricity rate:', error);
+                    // Keep default rate
+                }
+            }
         };
         loadData();
     }, []);
@@ -205,8 +220,6 @@ const ElectricityTab: React.FC<{ onRefresh: () => void }> = ({ onRefresh }) => {
             }
         }
     };
-
-    const currentRate = getCurrentElectricityRate(new Date().toISOString().split('T')[0]);
 
     return (
         <div className="pt-4 space-y-4">
@@ -769,7 +782,7 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
                     const tenant = await getTenantInRoom(roomId);
                     if(tenant && tenant.currentContract) {
                         const monthlyRent = tenant.currentContract.rentAmount;
-                        // Use backend calculation
+                        // Backend calculates the rent amount
                         const result = await calculateRentAmount({
                             monthly_rent: monthlyRent,
                             payment_term_months: paymentTermMonths,
@@ -779,13 +792,7 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
                     }
                 } catch (error) {
                     console.error('Error calculating rent:', error);
-                    // Fallback to local calculation if backend fails
-                    const tenant = await getTenantInRoom(roomId);
-                    if(tenant && tenant.currentContract) {
-                        const monthlyRent = tenant.currentContract.rentAmount;
-                        const calculated = (monthlyRent * paymentTermMonths) - discount;
-                        setAmount(calculated.toString());
-                    }
+                    // Error will prevent amount from being set - backend must handle all calculations
                 }
             }
         };
@@ -797,6 +804,7 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
         const calculateEnd = async () => {
             if (type === 'Rent' && periodStart && paymentTermMonths > 0) {
                 try {
+                    // Backend calculates the period end date
                     const result = await calculatePeriodEnd({
                         period_start: periodStart,
                         payment_term_months: paymentTermMonths
@@ -804,11 +812,7 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
                     setPeriodEnd(result.period_end);
                 } catch (error) {
                     console.error('Error calculating period end:', error);
-                    // Fallback to local calculation if backend fails
-                    const d = new Date(periodStart);
-                    d.setMonth(d.getMonth() + paymentTermMonths);
-                    d.setDate(d.getDate() - 1);
-                    setPeriodEnd(d.toISOString().split('T')[0]);
+                    // Error will prevent period end from being set - backend must handle all calculations
                 }
             } else {
                 setPeriodEnd('');
@@ -827,34 +831,19 @@ const ManualPaymentModal = ({ onClose }: { onClose: () => void }) => {
         let finalNote: string = note;
 
         if (type === 'Rent') {
-            // Calculate period end using backend
-            try {
-                const periodEndResult = await calculatePeriodEnd({
-                    period_start: periodStart,
-                    payment_term_months: paymentTermMonths
-                });
-                finalPeriodEnd = periodEndResult.period_end;
-            } catch (error) {
-                console.error('Error calculating period end:', error);
-                // Fallback to local calculation
-                const d = new Date(periodStart);
-                d.setMonth(d.getMonth() + paymentTermMonths);
-                d.setDate(d.getDate() - 1);
-                finalPeriodEnd = d.toISOString().split('T')[0];
-            }
+            // Backend calculates period end date
+            const periodEndResult = await calculatePeriodEnd({
+                period_start: periodStart,
+                payment_term_months: paymentTermMonths
+            });
+            finalPeriodEnd = periodEndResult.period_end;
 
-            // Format note using backend
-            try {
-                const noteResult = await formatRentNote({
-                    base_note: note,
-                    discount: discount
-                });
-                finalNote = noteResult.formatted_note;
-            } catch (error) {
-                console.error('Error formatting rent note:', error);
-                // Fallback to local formatting
-                finalNote = discount > 0 ? `${note} (Includes NT$${discount} discount)`.trim() : note;
-            }
+            // Backend formats the note with discount information
+            const noteResult = await formatRentNote({
+                base_note: note,
+                discount: discount
+            });
+            finalNote = noteResult.formatted_note;
         }
 
         // Map Transaction type to ensure it's valid

@@ -4,135 +4,62 @@ This document identifies business logic that is currently implemented in the fro
 
 ## Summary
 
-Found **8 major areas** where business logic should be moved to the backend:
+Found **12 major areas** where business logic should be moved to the backend:
 
----
+- **7 REMAINING** ⚠️ (still in frontend)
 
-## 1. Rent Amount Calculation
-**Location:** `frontend/components/FinanceManager.tsx` - `ManualPaymentModal` component
+## ⚠️ REMAINING Issues (Still in Frontend)
 
-**Lines:** 562-574, 588-589
+### 6. Payment Status/Category Mapping
+**Location:** `frontend/services/propertyService.ts` - `getTransactions`
 
-**Issue:**
-- Rent calculation: `(monthlyRent * paymentTermMonths) - discount` is calculated in the frontend
-- Period end date calculation: `getPeriodEnd()` function calculates date ranges
-- Note formatting with discount information
-
-**Should be:**
-- Backend should calculate the total rent amount based on payment term, discounts, and business rules
-- Backend should calculate period end dates based on start date and payment term
-- Backend should handle discount application logic
-
----
-
-## 2. Proration Calculation
-**Location:** `frontend/services/propertyService.ts`
-
-**Lines:** 362-367
+**Lines:** 80-89, 91-93
 
 **Issue:**
 ```typescript
-export const calculateProration = (rent: number, terminationDate: string, endDate: string): number => {
-    const term = new Date(terminationDate);
-    const daysInMonth = new Date(term.getFullYear(), term.getMonth() + 1, 0).getDate();
-    const daysUsed = term.getDate();
-    return Math.round((daysUsed / daysInMonth) * rent);
-};
+type: p.category === 'rent' ? 'Rent' : 
+      p.category === 'electricity' ? 'Electricity' : 
+      p.category === 'penalty' ? 'Fee' : 
+      p.category === 'deposit' ? 'Deposit' : 'Rent',
+status: p.status === 'paid' ? 'Paid' :
+        p.status === 'overdue' ? 'Overdue' :
+        p.status === 'partial' ? 'Overdue' : 
+        p.status === 'uncollectable' ? 'Overdue' : 'Overdue',
+method: p.payment_method === 'bank' ? 'Transfer' :
+        p.payment_method === 'cash' ? 'Cash' :
+        p.payment_method === 'LINE_Pay' ? 'LinePay' : undefined,
 ```
 
-**Used in:** `frontend/components/TenantDetailModal.tsx` (line 51)
+**Note:** `getTransactionsByRoom` (line 114-117) correctly uses backend-provided `transaction_type` and `transaction_status`, but `getTransactions` still does client-side mapping.
 
 **Should be:**
-- Proration calculation should be done on the backend when terminating a contract
-- Business rules for proration (rounding, partial days, etc.) should be enforced server-side
+- Backend should return standardized enum values for all transaction endpoints
+- Frontend should not need to map backend category/status values
+- Consistent with `getTransactionsByRoom` which already uses backend mappings
 
 ---
 
-## 3. Electricity Cost Calculation
-**Location:** `frontend/components/TenantDetailModal.tsx`
+### 7. Expense Filtering by Direction
+**Location:** `frontend/services/propertyService.ts` - `getExpenses`
 
-**Lines:** 38-47
+**Line:** 287
 
 **Issue:**
 ```typescript
-const usage = parseFloat(finalReading) - tenant.room.currentMeterReading;
-if (usage >= 0) {
-    setElecCost(usage * currentRate);
-}
+const expenses = data.filter(cf => cf.category_direction === 'out' || cf.direction === 'out');
 ```
 
 **Should be:**
-- Electricity cost calculation should be done on the backend
-- Usage calculation and rate application should be server-side logic
+- Backend should provide a query parameter: `/cash-flow/?direction=out` or `/cash-flow/expenses`
+- Filtering should be done server-side
+- Frontend should not need to filter all cash flows client-side
 
 ---
 
-## 4. Electricity Rate Retrieval
-**Location:** `frontend/services/propertyService.ts`
-
-**Lines:** 305-308
-
-**Issue:**
-```typescript
-export const getCurrentElectricityRate = (date: string, roomId?: any): number => {
-    // In a real app, this should be fetched from the DB state or an async call
-    return 5.0; 
-};
-```
-
-**Used in:** 
-- `frontend/components/FinanceManager.tsx` (line 208)
-- `frontend/components/TenantDetailModal.tsx` (line 36)
-
-**Should be:**
-- Should be an async API call to the backend
-- Backend should determine the correct rate based on date, room, and rate rules
-- Currently hardcoded to 5.0, which means rate logic is missing
-
----
-
-## 5. Payment Status Mapping
-**Location:** `frontend/services/propertyService.ts` - `getTransactionsByRoom`
-
-**Lines:** 88-96
-
-**Issue:**
-```typescript
-type: p.category === '房租' ? 'Rent' : 
-      p.category === '電費' ? 'Electricity' : 
-      p.category === '罰款' ? 'Fee' : 
-      p.category === '押金' ? 'Deposit' : 'Rent',
-status: p.payment_status_en === 'Paid' ? 'Paid' :
-        p.payment_status_en === 'Unpaid' ? 'Unpaid' :
-        p.payment_status_en === 'Partial' ? 'Unpaid' : 'Unpaid',
-```
-
-**Should be:**
-- Category and status mapping should be standardized on the backend
-- Backend should return consistent enum values
-- Frontend should not need to map Chinese category names to English types
-
----
-
-## 6. Data Filtering and Aggregation for Charts
-**Location:** Multiple components
-
-**Issues:**
-- `frontend/components/FinanceManager.tsx` - `PaymentHistoryModal` (lines 746-750): Filters and maps transactions for chart display
-- `frontend/components/FinanceManager.tsx` - `ElectricityHistoryModal` (lines 830-834): Calculates usage (readingEnd - readingStart) for chart
-- `frontend/components/RoomManager.tsx` (lines 116-122, 125-133): Filters and transforms data for chart visualization
-
-**Should be:**
-- Backend should provide pre-aggregated data for charts
-- Usage calculations should be done server-side
-- Filtering by transaction type should be a backend query parameter
-
----
-
-## 7. Room Status Filtering
+### 8. Room Status Filtering
 **Location:** `frontend/components/FinanceManager.tsx` - `ElectricityTab`
 
-**Line:** 188
+**Line:** 204
 
 **Issue:**
 ```typescript
@@ -140,53 +67,145 @@ const occupiedRooms = rooms.filter(r => r.status === 'Occupied');
 ```
 
 **Should be:**
-- Backend should provide an endpoint to get only occupied rooms
-- Filtering should be a query parameter: `/rooms/?status=Occupied`
+- Backend should provide query parameter: `/rooms/?status=Occupied`
+- Filtering should be a backend query parameter
+- Reduces data transfer and improves performance
 
 ---
 
-## 8. Building/Room Name Lookup
+### 9. Data Filtering and Aggregation for Charts
 **Location:** Multiple components
 
 **Issues:**
-- `frontend/components/FinanceManager.tsx` (line 124, 227): Finds building/room by ID in frontend
-- `frontend/components/RoomManager.tsx` (line 105): Finds building by ID in frontend
+- `frontend/components/FinanceManager.tsx` - `PaymentHistoryModal` (line 1011): Filters transactions by type `t.type === 'Rent'`
+- `frontend/components/FinanceManager.tsx` - `ElectricityHistoryModal` (line 1084): Filters transactions by type `t.type === 'Electricity'`
+- `frontend/components/RoomManager.tsx` (line 116): Filters and maps transactions for chart display
+- `frontend/components/FinanceManager.tsx` (line 118): Filters out `MachineIncome` transactions
 
 **Should be:**
-- Backend should return related entity data (building names, room numbers) in the response
+- Backend should provide pre-filtered endpoints: `/rooms/{roomId}/invoices?category=rent`
+- Backend should provide pre-aggregated chart data endpoints
+- Filtering by transaction type should be a backend query parameter
+- Reduces client-side processing and ensures consistency
+
+---
+
+### 10. Building/Room Name Formatting and Lookup
+**Location:** Multiple components and services
+
+**Issues:**
+- `frontend/services/propertyService.ts` (line 16): Formats building name `Building ${b.building_no}`
+- `frontend/services/propertyService.ts` (line 28, 59, 154, 234): Formats room number `${r.floor_no}${r.room_no}`
+- `frontend/services/propertyService.ts` (line 40, 135, 195): Formats tenant name `${t.last_name}${t.first_name}`
+- `frontend/components/RoomManager.tsx` (line 105): Finds building by ID in frontend
+- `frontend/components/FinanceManager.tsx` (line 124, 227): Finds building/room by ID in frontend
+- `frontend/components/TenantList.tsx` (line 38-45): Formats location string
+
+**Should be:**
+- Backend should return formatted display names in API responses
+- Backend should include related entity data (building names, room numbers) in responses
 - Or provide denormalized views that include related data
-- Frontend should not need to join data client-side
+- Frontend should not need to join data client-side or format display strings
+
+---
+
+### 11. Floor/Room Filtering Logic
+**Location:** `frontend/components/FinanceManager.tsx` - `ExpensesTab`
+
+**Lines:** 377-388
+
+**Issue:**
+```typescript
+const availableFloors = Array.from(new Set(
+    rooms.filter(r => !expenseForm.building_id || r.building_id === Number(expenseForm.building_id))
+        .map(r => r.floor_no)
+)).sort((a: number, b: number) => a - b);
+
+const availableRooms = rooms.filter(r => {
+    if (expenseForm.building_id && r.building_id !== Number(expenseForm.building_id)) return false;
+    if (expenseForm.floor_no && r.floor_no !== Number(expenseForm.floor_no)) return false;
+    return true;
+});
+```
+
+**Should be:**
+- Backend should provide hierarchical endpoints:
+  - `/buildings/{buildingId}/floors` - Get available floors for a building
+  - `/buildings/{buildingId}/floors/{floorNo}/rooms` - Get rooms for a floor
+- Or use query parameters: `/rooms/?building_id={id}&floor_no={floor}`
+- Reduces client-side filtering and improves UX with cascading dropdowns
+
+---
+
+### 12. Category Lookup and Mapping
+**Location:** `frontend/services/propertyService.ts`
+
+**Lines:** 362, 513, 562
+
+**Issue:**
+```typescript
+const laundryCategory = categories.find(c => c.code === 'laundry_income');
+const category = categories.find(c => c.chinese_name === ex.category);
+```
+
+**Should be:**
+- Backend should accept category IDs directly
+- Or backend should accept category codes/names and resolve them server-side
+- Frontend should not need to fetch all categories and search client-side
+- Reduces API calls and client-side logic
 
 ---
 
 ## Recommendations
 
-### High Priority (Core Business Logic)
-1. **Rent calculation logic** - Critical for financial accuracy
-2. **Proration calculation** - Important for contract termination
-3. **Electricity cost calculation** - Financial calculation that must be accurate
-4. **Electricity rate retrieval** - Currently hardcoded, needs proper implementation
-
 ### Medium Priority (Data Consistency)
-5. **Payment status/category mapping** - Should be standardized
+5. **Payment status/category mapping** - Should be standardized (partially fixed in `getTransactionsByRoom`)
 6. **Data filtering for charts** - Performance and consistency
+7. **Expense filtering** - Should use backend query parameters
+8. **Category lookup** - Should use backend resolution
 
 ### Low Priority (Optimization)
-7. **Room status filtering** - Can be optimized with backend query
-8. **Building/room name lookup** - Can be optimized with better API responses
+9. **Room status filtering** - Can be optimized with backend query
+10. **Building/room name lookup** - Can be optimized with better API responses
+11. **Floor/room filtering** - Can be optimized with hierarchical endpoints
+12. **Name/display formatting** - Can be optimized with backend formatting
 
 ---
 
 ## Implementation Notes
 
-When moving this logic to the backend:
+When moving remaining logic to the backend:
 
-1. **Validation**: Ensure all calculations match business rules exactly
-2. **Testing**: Add comprehensive tests for financial calculations
-3. **API Design**: Design RESTful endpoints that clearly expose business operations
-4. **Error Handling**: Ensure proper error messages for invalid inputs
-5. **Performance**: Consider caching for frequently accessed rates and calculations
-6. **Audit Trail**: Log all financial calculations for audit purposes
+1. **API Design**: 
+   - Use query parameters for filtering: `?status=Occupied&category=rent`
+   - Provide hierarchical endpoints for cascading dropdowns
+   - Return formatted display names in API responses
+
+2. **Consistency**: 
+   - Ensure all endpoints return standardized enum values
+   - Use the same approach as `getTransactionsByRoom` which already uses backend mappings
+
+3. **Performance**: 
+   - Pre-filter and pre-aggregate data on the backend
+   - Reduce data transfer by filtering server-side
+   - Cache frequently accessed lookups (categories, buildings)
+
+4. **Testing**: 
+   - Test all filtering and query parameter combinations
+   - Verify formatted display names are correct
+   - Ensure backward compatibility during migration
+
+---
+
+## Progress Summary
+
+- **Fixed:** 5/12 issues (42%)
+- **Remaining:** 7/12 issues (58%)
+- **Critical Issues:** All fixed ✅
+- **Medium Priority:** 4 remaining
+- **Low Priority:** 3 remaining
+
+---
 
 # TO DO LIST:
 - Add logic for room change

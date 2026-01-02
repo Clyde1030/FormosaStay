@@ -70,15 +70,20 @@ class LeaseRenew(BaseModel):
 
 
 class LeaseUpdate(BaseModel):
-    """Schema for updating a draft or pending lease contract"""
-    start_date: Optional[date] = Field(None, description="Lease start date")
-    end_date: Optional[date] = Field(None, description="Lease end date")
-    monthly_rent: Optional[Decimal] = Field(None, gt=0, description="Monthly rent amount")
-    deposit: Optional[Decimal] = Field(None, ge=0, description="Security deposit amount")
-    pay_rent_on: Optional[int] = Field(None, ge=1, le=31, description="Day of month when rent is due (1-31)")
-    payment_term: Optional[str] = Field(None, description="Payment term")
-    vehicle_plate: Optional[str] = Field(None, description="Vehicle/motorcycle plate number")
-    assets: Optional[List[LeaseAssetCreate]] = Field(None, description="Assets associated with the lease")
+    """Schema for updating a lease contract
+    
+    Tenant information (tenant_data) can be updated at any time, regardless of lease status.
+    Lease fields (start_date, end_date, monthly_rent, etc.) can only be updated when the lease is editable (draft status, no invoices, no cashflows).
+    """
+    tenant_data: Optional[TenantCreate] = Field(None, description="Tenant information for updating tenant (can be updated at any time)")
+    start_date: Optional[date] = Field(None, description="Lease start date (only editable when lease is in draft status)")
+    end_date: Optional[date] = Field(None, description="Lease end date (only editable when lease is in draft status)")
+    monthly_rent: Optional[Decimal] = Field(None, gt=0, description="Monthly rent amount (only editable when lease is in draft status)")
+    deposit: Optional[Decimal] = Field(None, ge=0, description="Security deposit amount (only editable when lease is in draft status)")
+    pay_rent_on: Optional[int] = Field(None, ge=1, le=31, description="Day of month when rent is due (1-31) (only editable when lease is in draft status)")
+    payment_term: Optional[str] = Field(None, description="Payment term (only editable when lease is in draft status)")
+    vehicle_plate: Optional[str] = Field(None, description="Vehicle/motorcycle plate number (only editable when lease is in draft status)")
+    assets: Optional[List[LeaseAssetCreate]] = Field(None, description="Assets associated with the lease (only editable when lease is in draft status)")
 
     @model_validator(mode="after")
     def validate_dates(self):
@@ -173,4 +178,17 @@ class LeaseResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ProrationCalculationRequest(BaseModel):
+    """Schema for proration calculation request"""
+    termination_date: date = Field(..., description="Date when the lease is terminated")
+
+
+class ProrationCalculationResponse(BaseModel):
+    """Schema for proration calculation response"""
+    prorated_amount: Decimal = Field(..., description="Prorated rent amount for the termination month")
+    monthly_rent: Decimal = Field(..., description="Monthly rent amount used in calculation")
+    days_used: int = Field(..., description="Number of days used in the termination month")
+    days_in_month: int = Field(..., description="Total number of days in the termination month")
 

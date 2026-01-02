@@ -16,8 +16,8 @@ This comprehensive guide covers the integration between the FormosaStay frontend
 
 ### Frontend Changes
 1. **Created API client** (`services/apiClient.ts`) - Handles all HTTP requests to FastAPI backend
-2. **Updated propertyService** - Replaced Supabase calls with FastAPI API calls
-3. **Created `.env.local`** - Configuration for API URL (defaults to http://localhost:8000)
+
+2. **Created `.env.local`** - Configuration for API URL (defaults to http://localhost:8000)
 
 ## 🚀 How to Run
 
@@ -54,7 +54,7 @@ Frontend will run on: **http://localhost:3000**
 - `GET /rooms/{id}/dashboard` - Get complete dashboard summary for a room (uses `v_room_dashboard_summary` view)
 - `GET /rooms/{id}/tenant` - Get current primary tenant for a room (uses `v_room_current_tenant` view)
 - `GET /rooms/{id}/tenants` - Get all current tenants for a room (primary and co-tenants)
-- `GET /rooms/{id}/payments` - Get payment/invoice history for a room (uses `v_room_payment_history` view)
+- `GET /rooms/{id}/invoices` - Get payment/invoice history for a room (uses `v_room_payment_history` view)
   - Query params: `category`, `status_filter`, `limit`, `offset`
 - `GET /rooms/{id}/electricity` - Get electricity usage and cost history (uses `v_room_electricity_history` view)
   - Query params: `start_date`, `end_date`, `limit`, `offset`
@@ -82,21 +82,23 @@ Frontend will run on: **http://localhost:3000**
 
 ### ⚠️ TODO - Missing Backend Endpoints
 These frontend functions need backend endpoints:
-- `getTransactions()` - Need `/payments/` or `/invoices/` endpoint (global list)
-- `addTransaction()` - Need `POST /invoices/` or `POST /payments/` endpoint
-- `updateTransaction()` - Need `PUT /invoices/{id}` or `PUT /payments/{id}` endpoint
-- `deleteTransaction()` - Need `DELETE /invoices/{id}` or `DELETE /payments/{id}` endpoint
-- `getExpenses()` - Need `GET /cash-flow/` endpoint
-- `addExpense()` - Need `POST /cash-flow/` endpoint
-- `updateExpense()` - Need `PUT /cash-flow/{id}` endpoint
-- `deleteExpense()` - Need `DELETE /cash-flow/{id}` endpoint
+- `getTransactions()` - Need `GET /invoices/` endpoint (global list) - **Note**: `GET /invoices/` exists but may need to match frontend expectations
 - `getElectricityRates()` - Need `GET /electricity-rates/` endpoint
 - `addElectricityRate()` - Need `POST /electricity-rates/` endpoint
 - `deleteElectricityRate()` - Need `DELETE /electricity-rates/{id}` endpoint
 - `recordMeterReading()` - Need `POST /meter-readings/` endpoint
-- `updateContract()` - Need `PUT /leases/{id}` endpoint
 
-**Note**: `getTransactionsByRoom()` is already implemented via `GET /rooms/{id}/payments`
+### ✅ Already Implemented Endpoints
+These endpoints are already implemented and working:
+- `addTransaction()` → `POST /invoices/` ✅
+- `updateTransaction()` → `PUT /invoices/{id}` ✅
+- `deleteTransaction()` → `DELETE /invoices/{id}` ✅
+- `getExpenses()` → `GET /cash-flow/` ✅
+- `addExpense()` → `POST /cash-flow/` ✅
+- `updateExpense()` → `PUT /cash-flow/{id}` ✅
+- `deleteExpense()` → `DELETE /cash-flow/{id}` ✅
+- `updateContract()` → `PUT /leases/{id}` ✅
+- `getTransactionsByRoom()` → `GET /rooms/{id}/invoices` ✅
 
 ---
 
@@ -108,61 +110,16 @@ The system uses PostgreSQL views to provide pre-computed, aggregated data that s
 
 The following views are defined in the database:
 
-1. **v_room_availability** - Room availability status
-2. **v_lease_status** - Lease status calculations
-3. **v_tenant_complete** - Complete tenant information with active leases
-4. **v_room_current_tenant** - Current tenant(s) for a room
-5. **v_room_payment_history** - Payment/invoice history for rooms
-6. **v_room_electricity_history** - Electricity usage and billing history
-7. **v_room_dashboard_summary** - Comprehensive room dashboard data
+1. **v_tenant_complete** - Complete tenant information with active leases
+2. **v_room_current_tenant** - Current tenant(s) for a room
+3. **v_room_payment_history** - Payment/invoice history for rooms
+4. **v_room_electricity_history** - Electricity usage and billing history
+5. **v_room_dashboard_summary** - Comprehensive room dashboard data
+6. **v_user_role** - User information with role assignments
 
 ### View Details
 
-#### 1. v_room_availability
-
-**Purpose**: Determines if a room is currently available for rent.
-
-**Logic**:
-- A room is available if:
-  - `is_rentable = TRUE`
-  - AND there is NO active lease (no lease with `terminated_at IS NULL` and `end_date >= CURRENT_DATE`)
-
-**Columns**:
-- All columns from `room` table
-- `is_available` (BOOLEAN) - Computed availability status
-
-**Backend Usage**: Currently not directly used in API endpoints, but the logic is implemented in `rooms.py` router.
-
-**Frontend Connection**: 
-- Indirectly used through `/rooms/` endpoint
-- Frontend receives room status as "Occupied" or "Vacant" based on active lease presence
-
----
-
-#### 2. v_lease_status
-
-**Purpose**: Calculates the current status of a lease based on business rules.
-
-**Business Rules**:
-- IF `terminated_at IS NOT NULL` → **終止** (Terminated)
-- ELSE IF `end_date < CURRENT_DATE` → **到期** (Expired)
-- ELSE → **有效** (Active)
-
-**Columns**:
-- `lease_id` - Lease identifier
-- `status` - Computed status (終止/到期/有效)
-
-**Backend Usage**: 
-- Logic is embedded in other views (`v_tenant_complete`, `v_room_current_tenant`)
-- Used indirectly through tenant and room endpoints
-
-**Frontend Connection**:
-- Used in tenant list and room detail views
-- Displayed in lease status fields throughout the UI
-
----
-
-#### 3. v_tenant_complete
+#### 1. v_tenant_complete
 
 **Purpose**: Provides comprehensive tenant information including emergency contacts, active lease details, and associated room/building information.
 
@@ -215,7 +172,7 @@ Frontend displays tenant list
 
 ---
 
-#### 4. v_room_current_tenant
+#### 2. v_room_current_tenant
 
 **Purpose**: Shows the current active tenant(s) for a room, including both primary and co-tenants.
 
@@ -236,7 +193,7 @@ Frontend displays tenant list
   - `GET /rooms/{room_id}/tenant` - Primary tenant only
   - `GET /rooms/{room_id}/tenants` - All tenants
 - **File**: `backend/app/routers/rooms.py`
-- Queries with filters: `SELECT * FROM v_room_current_tenant WHERE room_id = :room_id AND tenant_role = '主要'`
+- Queries with filters: `SELECT * FROM v_room_current_tenant WHERE room_id = :room_id AND tenant_role = 'primary'`
 
 **Frontend Connection**:
 - **Service**: `frontend/services/propertyService.ts`
@@ -257,7 +214,7 @@ apiClient.get(`/rooms/${roomId}/tenant`)
   ↓
 Backend: GET /rooms/{room_id}/tenant (rooms.py)
   ↓
-SQL: SELECT * FROM v_room_current_tenant WHERE room_id = :room_id AND tenant_role = '主要'
+SQL: SELECT * FROM v_room_current_tenant WHERE room_id = :room_id AND tenant_role = 'primary'
   ↓
 Response with tenant data
   ↓
@@ -266,7 +223,7 @@ Frontend displays tenant in room detail view
 
 ---
 
-#### 5. v_room_payment_history
+#### 3. v_room_payment_history
 
 **Purpose**: Provides complete payment/invoice history for a room, including rent, electricity, penalties, and deposits.
 
@@ -284,14 +241,14 @@ Frontend displays tenant in room detail view
 - Calculated: `outstanding_amount`, `period_display`
 
 **Backend Usage**:
-- **Endpoint**: `GET /rooms/{room_id}/payments`
+- **Endpoint**: `GET /rooms/{room_id}/invoices`
 - **File**: `backend/app/routers/rooms.py`
 - Supports filtering by `category` and `status_filter`
 - Supports pagination with `limit` and `offset`
 
 **Frontend Connection**:
 - **Service**: `frontend/services/propertyService.ts`
-- **Function**: `getTransactionsByRoom(roomId)` → calls `/rooms/{room_id}/payments`
+- **Function**: `getTransactionsByRoom(roomId)` → calls `/rooms/{room_id}/invoices`
 - **Components**:
   - `RoomManager.tsx` - Room detail dashboard showing payment history
   - Transaction lists and charts
@@ -302,9 +259,9 @@ Frontend: RoomManager component
   ↓
 propertyService.getTransactionsByRoom(roomId)
   ↓
-apiClient.get(`/rooms/${roomId}/payments`)
+apiClient.get(`/rooms/${roomId}/invoices`)
   ↓
-Backend: GET /rooms/{room_id}/payments (rooms.py)
+Backend: GET /rooms/{room_id}/invoices (rooms.py)
   ↓
 SQL: SELECT * FROM v_room_payment_history WHERE room_id = :room_id
   ↓
@@ -315,7 +272,7 @@ Frontend displays transactions in room detail view
 
 ---
 
-#### 6. v_room_electricity_history
+#### 4. v_room_electricity_history
 
 **Purpose**: Shows electricity meter readings and calculated costs for a room.
 
@@ -366,7 +323,7 @@ Frontend displays electricity data in room detail view
 
 ---
 
-#### 7. v_room_dashboard_summary
+#### 5. v_room_dashboard_summary
 
 **Purpose**: Comprehensive all-in-one view for room dashboard data, combining tenant, lease, payment, and electricity information.
 
@@ -411,19 +368,62 @@ const dashboard = await apiClient.get(`/rooms/${roomId}/dashboard`);
 
 ---
 
+#### 6. v_user_role
+
+**Purpose**: Provides user information with role assignments for access control and management.
+
+**Key Features**:
+- Links users to their assigned roles
+- Provides user contact information
+- Used for manager information retrieval
+
+**Columns**:
+- User info: `user_id`, `name`, `phone`, `email`
+- Role info: `role` (e.g., 'manager', 'admin', 'staff')
+
+**Backend Usage**:
+- **Endpoint**: `GET /users/manager`
+- **File**: `backend/app/routers/users.py`
+- Queries the view to get manager information: `SELECT * FROM v_user_role WHERE role = 'manager'`
+
+**Frontend Connection**:
+- **Service**: `frontend/services/propertyService.ts`
+- **Function**: `getManager()` → calls `/users/manager`
+- **Components**:
+  - `SystemSettings.tsx` - Displays manager information
+  - Dashboard components - Shows manager contact info
+
+**Data Flow**:
+```
+Frontend Component
+  ↓
+propertyService.getManager()
+  ↓
+apiClient.get('/users/manager')
+  ↓
+Backend: GET /users/manager (users.py)
+  ↓
+SQL: SELECT * FROM v_user_role WHERE role = 'manager'
+  ↓
+Response with manager data
+  ↓
+Frontend displays manager information
+```
+
+---
+
 ### View Creation and Migration
 
 Views are created through Alembic migrations:
 - Location: `backend/alembic/sql/`
-- Migration file: `backend/alembic/versions/0002_remove_lease_status_column.py`
+- Migration file: `backend/alembic/versions/0002_create_views.py`
 - SQL files:
-  - `0002_v_room_availability.sql`
-  - `0002_v_lease_status.sql`
   - `0002_v_tenant_complete.sql`
   - `0002_v_room_current_tenant.sql`
   - `0002_v_room_payment_history.sql`
   - `0002_v_room_electricity_history.sql`
   - `0002_v_room_dashboard_summary.sql`
+  - `0002_v_user_role.sql`
 
 To recreate views after database reset:
 ```bash
@@ -497,6 +497,510 @@ React Component (display)
 - Consistent error handling with HTTP status codes
 - JSON responses with standardized data structures
 - Database views for optimized data access
+
+---
+
+## 🔗 Complete Connection Flow: Database → UI
+
+This section provides a detailed mapping of how data flows from the database through all layers to the user interface. Each feature shows the complete chain: **Database (Tables/Views) → Router → Services → Frontend Services → Frontend Functions → UI Buttons**.
+
+### 1. Tenants Management
+
+#### List Tenants
+```
+Database: v_tenant_complete (view)
+  ↓
+Router: GET /tenants/ (backend/app/routers/tenants.py)
+  ↓
+Frontend Service: getTenants() / fetchTenantsWithDetails() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: TenantList.tsx
+  ↓
+UI: Search input field + Tenant table rows (onClick to view details)
+```
+
+#### Get Tenant by ID
+```
+Database: v_tenant_complete (view)
+  ↓
+Router: GET /tenants/{tenant_id} (backend/app/routers/tenants.py)
+  ↓
+Frontend Service: getTenantById() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: TenantDetailModal.tsx
+  ↓
+UI: Click on tenant row → Opens modal with tenant details
+```
+
+#### Create Tenant
+```
+Database: tenant, tenant_emergency_contact (tables)
+  ↓
+Router: POST /tenants/ (backend/app/routers/tenants.py)
+  ↓
+Backend Service: TenantService.create_or_update_tenant() (backend/app/services/tenant_service.py)
+  ↓
+Frontend Service: createTenant() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: NewTenantModal.tsx
+  ↓
+UI: "Add Tenant" button → Opens modal → "Save" button
+```
+
+#### Update Tenant
+```
+Database: tenant, tenant_emergency_contact (tables)
+  ↓
+Router: PUT /tenants/{tenant_id} (backend/app/routers/tenants.py)
+  ↓
+Backend Service: TenantService.create_or_update_tenant() (backend/app/services/tenant_service.py)
+  ↓
+Frontend Service: updateTenant() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: TenantDetailModal.tsx
+  ↓
+UI: "Edit" button → Form fields → "Save" button
+```
+
+---
+
+### 2. Rooms Management
+
+#### List Rooms
+```
+Database: room, lease (tables)
+  ↓
+Router: GET /rooms/ (backend/app/routers/rooms.py)
+  ↓
+Frontend Service: getRooms() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: RoomManager.tsx
+  ↓
+UI: Room cards displayed → Click card to view details
+```
+
+#### Get Room Details
+```
+Database: room (table)
+  ↓
+Router: GET /rooms/{room_id} (backend/app/routers/rooms.py)
+  ↓
+Frontend Service: getRooms() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: RoomManager.tsx → RoomDetailDashboard
+  ↓
+UI: Room card click → Opens room detail dashboard
+```
+
+#### Get Room Tenant
+```
+Database: v_room_current_tenant (view)
+  ↓
+Router: GET /rooms/{room_id}/tenant (backend/app/routers/rooms.py)
+  ↓
+Frontend Service: getTenantInRoom() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: RoomManager.tsx → RoomDetailDashboard
+  ↓
+UI: Room detail dashboard → Tenant section displayed
+```
+
+#### Get Room Payment History
+```
+Database: v_room_payment_history (view)
+  ↓
+Router: GET /rooms/{room_id}/invoices (backend/app/routers/rooms.py)
+  ↓
+Frontend Service: getTransactionsByRoom() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: RoomManager.tsx → RoomDetailDashboard
+  ↓
+UI: Room detail dashboard → Payment history table
+```
+
+**Note**: The endpoint is `/rooms/{room_id}/invoices` (not `/payments`), but it uses the `v_room_payment_history` view.
+
+#### Get Room Electricity History
+```
+Database: v_room_electricity_history (view)
+  ↓
+Router: GET /rooms/{room_id}/electricity (backend/app/routers/rooms.py)
+  ↓
+Frontend Service: getRoomElectricityHistory() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: RoomManager.tsx → RoomDetailDashboard
+  ↓
+UI: Room detail dashboard → Electricity usage chart/table
+```
+
+#### Get Room Dashboard Summary
+```
+Database: v_room_dashboard_summary (view)
+  ↓
+Router: GET /rooms/{room_id}/dashboard (backend/app/routers/rooms.py)
+  ↓
+Frontend Service: (Not currently used, but available)
+  ↓
+Frontend Component: (Could be used to optimize RoomDetailDashboard)
+  ↓
+UI: (Potential optimization for single-query dashboard loading)
+```
+
+---
+
+### 3. Leases/Contracts Management
+
+#### List Leases
+```
+Database: lease, lease_tenant (tables)
+  ↓
+Router: GET /leases/ (backend/app/routers/leases.py)
+  ↓
+Backend Service: LeaseService.list_leases() (backend/app/services/lease_service.py)
+  ↓
+Frontend Service: (Not directly exposed, used internally)
+  ↓
+Frontend Component: (Used in various components)
+  ↓
+UI: (Displayed in tenant/room detail views)
+```
+
+#### Get Lease by ID
+```
+Database: lease, lease_tenant (tables)
+  ↓
+Router: GET /leases/{lease_id} (backend/app/routers/leases.py)
+  ↓
+Backend Service: LeaseService.get_lease() (backend/app/services/lease_service.py)
+  ↓
+Frontend Service: (Not directly exposed, used internally)
+  ↓
+Frontend Component: TenantDetailModal.tsx, RoomDetailDashboard
+  ↓
+UI: Lease information displayed in tenant/room details
+```
+
+#### Create Lease/Contract
+```
+Database: lease, lease_tenant (tables)
+  ↓
+Router: POST /leases/ (backend/app/routers/leases.py)
+  ↓
+Backend Service: LeaseService.create_lease() (backend/app/services/lease_service.py)
+  ↓
+Frontend Service: createContract() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: NewContractModal.tsx
+  ↓
+UI: "New Contract" button → Form → "Create Contract" button
+```
+
+#### Update Lease
+```
+Database: lease (table)
+  ↓
+Router: PUT /leases/{lease_id} (backend/app/routers/leases.py)
+  ↓
+Backend Service: LeaseService.update_lease() (backend/app/services/lease_service.py)
+  ↓
+Frontend Service: updateContract() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: TenantDetailModal.tsx or contract edit form
+  ↓
+UI: "Edit Contract" button → Form → "Save" button
+```
+
+#### Submit Lease
+```
+Database: lease (table) - sets submitted_at
+  ↓
+Router: POST /leases/{lease_id}/submit (backend/app/routers/leases.py)
+  ↓
+Backend Service: LeaseService.submit_lease() (backend/app/services/lease_service.py)
+  ↓
+Frontend Service: submitContract() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: NewContractModal.tsx or contract detail view
+  ↓
+UI: "Submit Contract" button
+```
+
+#### Renew Lease
+```
+Database: lease (table) - updates end_date, optional rent/deposit
+  ↓
+Router: POST /leases/{lease_id}/renew (backend/app/routers/leases.py)
+  ↓
+Backend Service: LeaseService.renew_lease() (backend/app/services/lease_service.py)
+  ↓
+Frontend Service: renewContract() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: TenantDetailModal.tsx or contract detail view
+  ↓
+UI: "Renew Contract" button → Form → "Renew" button
+```
+
+#### Terminate Lease
+```
+Database: lease (table) - sets terminated_at, creates invoice if meter reading provided
+  ↓
+Router: POST /leases/{lease_id}/terminate (backend/app/routers/leases.py)
+  ↓
+Backend Service: LeaseService.terminate_lease() (backend/app/services/lease_service.py)
+  ↓
+Frontend Service: terminateContract() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: TenantDetailModal.tsx or contract detail view
+  ↓
+UI: "Terminate Contract" button → Form → "Terminate" button
+```
+
+#### Amend Lease
+```
+Database: lease_amendment (table)
+  ↓
+Router: POST /leases/{lease_id}/amend (backend/app/routers/leases.py)
+  ↓
+Backend Service: LeaseService.create_amendment() (backend/app/services/lease_service.py)
+  ↓
+Frontend Service: amendContract() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: TenantDetailModal.tsx or contract detail view
+  ↓
+UI: "Amend Contract" button → Form → "Create Amendment" button
+```
+
+---
+
+### 4. Dashboard Statistics
+
+#### Get Dashboard Stats
+```
+Database: room, lease, invoice (tables) - aggregated queries
+  ↓
+Router: GET /dashboard/stats (backend/app/routers/dashboard.py)
+  ↓
+Frontend Service: getDashboardStats() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: Dashboard.tsx
+  ↓
+UI: Dashboard page → Stats cards (total rooms, occupied, occupancy rate, overdue)
+```
+
+---
+
+### 5. Invoices/Transactions
+
+#### List All Transactions
+```
+Database: invoice, lease, room, tenant (tables) - joined query
+  ↓
+Router: GET /invoices/ (backend/app/routers/invoices.py)
+  ↓
+Frontend Service: getTransactions() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx
+  ↓
+UI: Finance Manager page → Transactions table
+```
+
+#### Create Transaction/Invoice
+```
+Database: invoice, cash_flow (tables)
+  ↓
+Router: POST /invoices/ (backend/app/routers/invoices.py)
+  ↓
+Frontend Service: addTransaction() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx or transaction form
+  ↓
+UI: "Add Transaction" button → Form → "Save" button
+```
+
+#### Update Transaction
+```
+Database: invoice (table)
+  ↓
+Router: PUT /invoices/{invoice_id} (backend/app/routers/invoices.py)
+  ↓
+Frontend Service: updateTransaction() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx or transaction edit form
+  ↓
+UI: "Edit" button on transaction row → Form → "Save" button
+```
+
+#### Delete Transaction
+```
+Database: invoice (table) - soft delete
+  ↓
+Router: DELETE /invoices/{invoice_id} (backend/app/routers/invoices.py)
+  ↓
+Frontend Service: deleteTransaction() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx
+  ↓
+UI: "Delete" button on transaction row → Confirmation → "Confirm" button
+```
+
+#### Calculate Rent Amount
+```
+Database: (calculation only, no DB query)
+  ↓
+Router: POST /invoices/calculate-rent (backend/app/routers/invoices.py)
+  ↓
+Backend Service: InvoiceService.calculate_rent_amount() (backend/app/services/invoice_service.py)
+  ↓
+Frontend Service: calculateRentAmount() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: NewContractModal.tsx or invoice form
+  ↓
+UI: Form input changes → Auto-calculates rent amount
+```
+
+#### Calculate Period End
+```
+Database: (calculation only, no DB query)
+  ↓
+Router: POST /invoices/calculate-period-end (backend/app/routers/invoices.py)
+  ↓
+Backend Service: InvoiceService.calculate_period_end() (backend/app/services/invoice_service.py)
+  ↓
+Frontend Service: calculatePeriodEnd() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: NewContractModal.tsx or invoice form
+  ↓
+UI: Form input changes → Auto-calculates period end date
+```
+
+---
+
+### 6. Cash Flow / Expenses
+
+#### List Expenses
+```
+Database: cash_flow, cash_flow_category (tables) - joined query, filtered by direction='out'
+  ↓
+Router: GET /cash-flow/ (backend/app/routers/cash_flow.py)
+  ↓
+Frontend Service: getExpenses() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx
+  ↓
+UI: Finance Manager page → Expenses table
+```
+
+#### Create Expense
+```
+Database: cash_flow (table)
+  ↓
+Router: POST /cash-flow/ (backend/app/routers/cash_flow.py)
+  ↓
+Frontend Service: addExpense() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx or expense form
+  ↓
+UI: "Add Expense" button → Form → "Save" button
+```
+
+#### Update Expense
+```
+Database: cash_flow (table)
+  ↓
+Router: PUT /cash-flow/{cash_flow_id} (backend/app/routers/cash_flow.py)
+  ↓
+Frontend Service: updateExpense() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx or expense edit form
+  ↓
+UI: "Edit" button on expense row → Form → "Save" button
+```
+
+#### Delete Expense
+```
+Database: cash_flow (table) - soft delete
+  ↓
+Router: DELETE /cash-flow/{cash_flow_id} (backend/app/routers/cash_flow.py)
+  ↓
+Frontend Service: deleteExpense() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx
+  ↓
+UI: "Delete" button on expense row → Confirmation → "Confirm" button
+```
+
+#### Get Cash Flow Categories
+```
+Database: cash_flow_category (table)
+  ↓
+Router: GET /cash-flow/categories (backend/app/routers/cash_flow.py)
+  ↓
+Frontend Service: getCashFlowCategories() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx or expense form
+  ↓
+UI: Category dropdown in expense form
+```
+
+#### Get Cash Accounts
+```
+Database: cash_account (table)
+  ↓
+Router: GET /cash-flow/accounts (backend/app/routers/cash_flow.py)
+  ↓
+Frontend Service: getCashAccounts() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: FinanceManager.tsx or expense form
+  ↓
+UI: Account dropdown in expense form
+```
+
+---
+
+### 7. Buildings
+
+#### List Buildings
+```
+Database: building (table)
+  ↓
+Router: GET /buildings/ (backend/app/routers/buildings.py)
+  ↓
+Frontend Service: getBuildings() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: RoomManager.tsx
+  ↓
+UI: Building cards displayed in room manager
+```
+
+#### Get Building by ID
+```
+Database: building (table)
+  ↓
+Router: GET /buildings/{building_id} (backend/app/routers/buildings.py)
+  ↓
+Frontend Service: getBuildings() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: RoomManager.tsx
+  ↓
+UI: Building information displayed in room manager
+```
+
+---
+
+### 8. Users
+
+#### Get Manager Info
+```
+Database: user (table) - filtered by role
+  ↓
+Router: GET /users/manager (backend/app/routers/users.py)
+  ↓
+Frontend Service: getManager() (frontend/services/propertyService.ts)
+  ↓
+Frontend Component: SystemSettings.tsx or dashboard
+  ↓
+UI: Manager information displayed in settings/dashboard
+```
 
 ---
 

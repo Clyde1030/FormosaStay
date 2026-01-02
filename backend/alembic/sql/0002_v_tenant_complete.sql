@@ -56,10 +56,10 @@ SELECT
     l.payment_term,
     -- Calculate lease status: IF terminated_at IS NOT NULL → terminated, ELSE IF CURRENT_DATE > end_date → expired, ELSE IF submitted_at IS NULL → draft, ELSE IF CURRENT_DATE < start_date → pending, ELSE → active
     CASE 
-        WHEN l.terminated_at IS NOT NULL THEN 'terminated'
-        WHEN CURRENT_DATE > l.end_date THEN 'expired'
         WHEN l.submitted_at IS NULL THEN 'draft'
         WHEN CURRENT_DATE < l.start_date THEN 'pending'
+        WHEN l.terminated_at IS NOT NULL THEN 'terminated'
+        WHEN CURRENT_DATE > l.end_date THEN 'expired'
         ELSE 'active'
     END AS lease_status,
     l.vehicle_plate,

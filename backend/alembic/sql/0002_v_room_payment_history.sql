@@ -18,6 +18,7 @@ SELECT
     inv.category,
     inv.period_start,
     inv.period_end,
+    inv.period_end AS due_date,  -- Use period_end as due_date (invoice table doesn't have separate due_date)
     inv.due_amount,
     inv.paid_amount,
     inv.payment_status AS payment_status,
@@ -42,6 +43,26 @@ SELECT
         WHEN inv.payment_status = 'canceled' THEN 'Canceled'::TEXT
         ELSE inv.payment_status::TEXT
     END AS payment_status_en,
+    
+    -- Transaction Type for frontend (map category to Transaction type)
+    CASE 
+        WHEN inv.category = 'rent' THEN 'Rent'::TEXT
+        WHEN inv.category = 'electricity' THEN 'Electricity'::TEXT
+        WHEN inv.category = 'penalty' THEN 'Fee'::TEXT
+        WHEN inv.category = 'deposit' THEN 'Deposit'::TEXT
+        ELSE 'Rent'::TEXT
+    END AS transaction_type,
+    
+    -- Transaction Status for frontend (map payment status, treating Partial as Overdue)
+    CASE 
+        WHEN inv.payment_status = 'paid' THEN 'Paid'::TEXT
+        WHEN inv.payment_status = 'overdue' THEN 'Overdue'::TEXT
+        WHEN inv.payment_status = 'partial' THEN 'Overdue'::TEXT  -- Partial treated as Overdue
+        WHEN inv.payment_status = 'uncollectable' THEN 'Bad Debt'::TEXT
+        WHEN inv.payment_status = 'returned' THEN 'Returned'::TEXT
+        WHEN inv.payment_status = 'canceled' THEN 'Canceled'::TEXT
+        ELSE 'Overdue'::TEXT
+    END AS transaction_status,
     
     -- Calculate outstanding amount
     (inv.due_amount - inv.paid_amount) AS outstanding_amount,

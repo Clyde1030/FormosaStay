@@ -205,3 +205,69 @@ class ElectricityService:
 
         return bill_amount, payment_data
 
+    @staticmethod
+    async def calculate_electricity_cost(
+        db: AsyncSession,
+        room_id: int,
+        final_reading: Decimal,
+        reading_date: date
+    ) -> dict:
+        """
+        Calculate electricity cost for a given final reading.
+        
+        This is a simpler calculation used for preview/display purposes.
+        It calculates: usage = final_reading - previous_reading, cost = usage * rate
+        
+        Args:
+            db: Database session
+            room_id: Room ID
+            final_reading: Final meter reading value
+            reading_date: Date of the reading
+        
+        Returns:
+            dict with keys: usage_kwh, rate_per_kwh, cost, previous_reading
+        """
+        # Get previous reading
+        previous_reading_obj = await ElectricityService.get_previous_meter_reading(
+            db, room_id, reading_date
+        )
+        
+        if not previous_reading_obj:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=f"No previous meter reading found for room {room_id} before {reading_date}"
+            )
+        
+        previous_reading = previous_reading_obj.read_amount
+        
+        # Validate final reading is greater than previous
+        if final_reading < previous_reading:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=f"Final reading ({final_reading}) cannot be less than previous reading ({previous_reading})"
+            )
+        
+        # Calculate usage
+        usage_kwh = final_reading - previous_reading
+        
+        # Get electricity rate
+        rate = await ElectricityService.get_electricity_rate_for_room(
+            db, room_id, reading_date
+        )
+        
+        if not rate:
+            # Default rate if none found (matches frontend behavior)
+            rate_per_kwh = Decimal("6.0")
+        else:
+            rate_per_kwh = rate.rate_per_kwh
+        
+        # Calculate cost
+        cost = usage_kwh * rate_per_kwh
+        
+        return {
+            "usage_kwh": float(usage_kwh),
+            "rate_per_kwh": float(rate_per_kwh),
+            "cost": float(cost),
+            "previous_reading": float(previous_reading)
+        }
+
