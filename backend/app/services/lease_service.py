@@ -29,9 +29,9 @@ def determine_lease_status(lease: Lease, today: Optional[date] = None) -> LeaseS
     Rules:
     - terminated: lease.terminated_at IS NOT NULL
     - expired: today > lease.end_date AND terminated_at IS NULL
-    - pending: today < lease.start_date AND lease.submitted_at IS NOT NULL
-    - draft: today < lease.start_date AND lease.submitted_at IS NULL
-    - active: today >= lease.start_date AND today <= lease.end_date AND terminated_at IS NULL
+    - draft: lease.submitted_at IS NULL (tenant in queue, waiting for customer sign back)
+    - pending: lease.submitted_at IS NOT NULL AND today < lease.start_date (customer signed back, manager submitted, waiting for effective date)
+    - active: lease.submitted_at IS NOT NULL AND today >= lease.start_date AND today <= lease.end_date AND terminated_at IS NULL (locked for modifications, change via amendment/renew/terminate)
     """
     if today is None:
         today = date.today()
@@ -42,12 +42,14 @@ def determine_lease_status(lease: Lease, today: Optional[date] = None) -> LeaseS
         return "terminated"
     elif today > lease.end_date:
         return "expired"
+    elif lease.submitted_at is None:
+        # Not yet submitted - draft status (tenant in queue, waiting for customer sign back)
+        return "draft"
     elif today < lease.start_date:
-        if lease.submitted_at is not None:
-            return "pending"
-        else:
-            return "draft"
-    else:  # today >= start_date AND today <= end_date
+        # Submitted but effective date hasn't arrived - pending
+        return "pending"
+    else:  # submitted_at IS NOT NULL AND today >= start_date AND today <= end_date
+        # Submitted and effective date has arrived - active (locked for modifications)
         return "active"
 
 
@@ -184,12 +186,13 @@ class LeaseService:
         tenant_name = f"{tenant.first_name} {tenant.last_name}"
         tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
 
-        # Check if room already has an active lease (terminated_at IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
+        # Check if room already has an active lease (submitted, not terminated, and within date range)
         existing_lease_result = await db.execute(
             select(Lease)
             .where(
                 and_(
                     Lease.room_id == lease_data.room_id,
+                    ~Lease.submitted_at.is_(None),
                     Lease.terminated_at.is_(None),
                     Lease.start_date <= func.current_date(),
                     Lease.end_date >= func.current_date(),

@@ -21,11 +21,12 @@ SELECT
     b.building_no,
     b.address AS building_address,
     
-    -- Current Lease Status (active leases only)
+    -- Current Lease Status (active leases only - submitted, not terminated, and within date range)
     CASE 
         WHEN EXISTS (
             SELECT 1 FROM lease l 
             WHERE l.room_id = r.id 
+            AND l.submitted_at IS NOT NULL
             AND l.terminated_at IS NULL
             AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
             AND l.deleted_at IS NULL
@@ -113,7 +114,8 @@ SELECT
 FROM room r
 INNER JOIN building b ON b.id = r.building_id
 LEFT JOIN lease l ON l.room_id = r.id 
-    -- Active lease only: no terminated_at and CURRENT_DATE BETWEEN start_date AND end_date
+    -- Active lease only: submitted, not terminated, and CURRENT_DATE BETWEEN start_date AND end_date
+    AND l.submitted_at IS NOT NULL
     AND l.terminated_at IS NULL
     AND CURRENT_DATE BETWEEN l.start_date AND l.end_date
     AND l.deleted_at IS NULL

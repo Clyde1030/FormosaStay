@@ -47,9 +47,9 @@ class Lease(Base, AuditMixin):
         Rules:
         - terminated: terminated_at IS NOT NULL
         - expired: today > end_date AND terminated_at IS NULL
-        - pending: today < start_date AND submitted_at IS NOT NULL
-        - draft: today < start_date AND submitted_at IS NULL
-        - active: today >= start_date AND today <= end_date AND terminated_at IS NULL
+        - draft: submitted_at IS NULL (tenant in queue, waiting for customer sign back)
+        - pending: submitted_at IS NOT NULL AND today < start_date (customer signed back, manager submitted, waiting for effective date)
+        - active: submitted_at IS NOT NULL AND today >= start_date AND today <= end_date AND terminated_at IS NULL (locked for modifications, change via amendment/renew/terminate)
         """
         if today is None:
             today = date.today()
@@ -60,12 +60,14 @@ class Lease(Base, AuditMixin):
             return "terminated"
         elif today > self.end_date:
             return "expired"
+        elif self.submitted_at is None:
+            # Not yet submitted - draft status (tenant in queue, waiting for customer sign back)
+            return "draft"
         elif today < self.start_date:
-            if self.submitted_at is not None:
-                return "pending"
-            else:
-                return "draft"
-        else:  # today >= start_date AND today <= end_date
+            # Submitted but effective date hasn't arrived - pending
+            return "pending"
+        else:  # submitted_at IS NOT NULL AND today >= start_date AND today <= end_date
+            # Submitted and effective date has arrived - active (locked for modifications)
             return "active"
 
     @property

@@ -168,11 +168,12 @@ async def create_invoice_transaction(
                     detail=f"Room with id {invoice.room_id} not found"
                 )
             
-            # Get active lease for this room (CURRENT_DATE BETWEEN start_date AND end_date)
+            # Get active lease for this room (submitted, not terminated, and within date range)
             lease_result = await db.execute(
                 select(Lease).where(
                     and_(
                         Lease.room_id == invoice.room_id,
+                        ~Lease.submitted_at.is_(None),
                         Lease.terminated_at.is_(None),
                         Lease.start_date <= func.current_date(),
                         Lease.end_date >= func.current_date()

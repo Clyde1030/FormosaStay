@@ -29,10 +29,11 @@ async def list_rooms(
     result = await db.execute(query)
     rooms = result.scalars().all()
     
-    # Get active leases to determine room status (terminated_at IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
+    # Get active leases to determine room status (submitted, not terminated, and within date range)
     leases_result = await db.execute(
         select(Lease).where(
             and_(
+                ~Lease.submitted_at.is_(None),
                 Lease.terminated_at.is_(None),
                 Lease.start_date <= func.current_date(),
                 Lease.end_date >= func.current_date(),
@@ -81,11 +82,12 @@ async def get_room(room_id: int, db: AsyncSession = Depends(get_db)):
             detail=f"Room with id {room_id} not found"
         )
     
-    # Check if room has active lease (terminated_at IS NULL AND CURRENT_DATE BETWEEN start_date AND end_date)
+    # Check if room has active lease (submitted, not terminated, and within date range)
     lease_result = await db.execute(
         select(Lease).where(
             and_(
                 Lease.room_id == room_id,
+                ~Lease.submitted_at.is_(None),
                 Lease.terminated_at.is_(None),
                 Lease.start_date <= func.current_date(),
                 Lease.end_date >= func.current_date(),
