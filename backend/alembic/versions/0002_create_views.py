@@ -21,37 +21,26 @@ depends_on = None
 def upgrade() -> None:
     """Create all database views"""
     # Drop all views before recreating them (in case they exist)
-    op.execute("DROP VIEW IF EXISTS v_lease_status CASCADE")
-    op.execute("DROP VIEW IF EXISTS v_room_availability CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_current_tenant CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_dashboard_summary CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_electricity_history CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_payment_history CASCADE")
     op.execute("DROP VIEW IF EXISTS v_tenant_complete CASCADE")
-    op.execute("DROP VIEW IF EXISTS v_tenant_lease CASCADE")
-    op.execute("DROP VIEW IF EXISTS v_user_role CASCADE")
 
     # Create all views
-    execute_sql_file(op, "0002_v_lease_status.sql")
-    execute_sql_file(op, "0002_v_room_availability.sql")
     execute_sql_file(op, "0002_v_room_current_tenant.sql")
     execute_sql_file(op, "0002_v_room_dashboard_summary.sql")
     execute_sql_file(op, "0002_v_room_electricity_history.sql")
     execute_sql_file(op, "0002_v_room_payment_history.sql")
     execute_sql_file(op, "0002_v_tenant_complete.sql")
-    execute_sql_file(op, "0002_v_tenant_lease.sql")
-    execute_sql_file(op, "0002_v_user_role.sql")
+
 
 
 def downgrade() -> None:
     """Drop all database views"""
-    op.execute("DROP VIEW IF EXISTS v_lease_status CASCADE")
-    op.execute("DROP VIEW IF EXISTS v_room_availability CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_current_tenant CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_dashboard_summary CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_electricity_history CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_payment_history CASCADE")
     op.execute("DROP VIEW IF EXISTS v_tenant_complete CASCADE")
-    op.execute("DROP VIEW IF EXISTS v_tenant_lease CASCADE")
-    op.execute("DROP VIEW IF EXISTS v_user_role CASCADE")
 

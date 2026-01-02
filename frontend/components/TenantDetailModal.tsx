@@ -512,6 +512,35 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                         <CreditCard size={20} className="text-brand-500"/> Current Contract
                                     </h3>
                                     <div className="flex gap-2">
+                                        {/* Draft contract actions - Print and Submit */}
+                                        {tenant.currentContract?.status === ContractStatus.DRAFT && !tenant.currentContract?.submitted_at && (
+                                            <>
+                                                {/* Print Contract button - available for draft contracts */}
+                                                <button 
+                                                    onClick={handlePrint} 
+                                                    className="px-3 py-1.5 text-sm bg-slate-50 text-slate-700 rounded-lg hover:bg-slate-100 font-medium flex items-center gap-1"
+                                                    title="Print Contract"
+                                                >
+                                                    <Printer size={14}/> Print Contract
+                                                </button>
+                                                {/* Submit Contract button - only show for draft leases that haven't been submitted */}
+                                                <button 
+                                                    onClick={handleSubmitContract}
+                                                    disabled={isSubmitting}
+                                                    className="px-3 py-1.5 text-sm bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {isSubmitting ? (
+                                                        <>
+                                                            <Loader2 className="animate-spin" size={14}/> Submitting...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <CheckCircle size={14}/> Submit Contract
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </>
+                                        )}
                                         {/* Edit Contract button - show for draft and pending contracts */}
                                         {(tenant.currentContract?.status === ContractStatus.DRAFT || tenant.currentContract?.status === ContractStatus.PENDING) && !isEditing && (
                                             <button 
@@ -520,24 +549,6 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                                 title="Edit contract details"
                                             >
                                                 <Edit size={14}/> Edit Contract
-                                            </button>
-                                        )}
-                                        {/* Submit Contract button - only show for draft leases that haven't been submitted */}
-                                        {tenant.currentContract?.status === ContractStatus.DRAFT && !tenant.currentContract?.submitted_at && (
-                                            <button 
-                                                onClick={handleSubmitContract}
-                                                disabled={isSubmitting}
-                                                className="px-3 py-1.5 text-sm bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                {isSubmitting ? (
-                                                    <>
-                                                        <Loader2 className="animate-spin" size={14}/> Submitting...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <CheckCircle size={14}/> Submit Contract
-                                                    </>
-                                                )}
                                             </button>
                                         )}
                                         {/* Active lease actions */}
