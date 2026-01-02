@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import rooms, health, leases, buildings, tenants, dashboard, cash_flow, invoices
+from app.routers import rooms, health, leases, buildings, tenants, dashboard, cash_flow, invoices, users
 
 
 app = FastAPI(
@@ -32,6 +32,7 @@ app.include_router(leases.router)
 app.include_router(dashboard.router)
 app.include_router(cash_flow.router)
 app.include_router(invoices.router)
+app.include_router(users.router)
 
 
 @app.get("/", tags=["System"])

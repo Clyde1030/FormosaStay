@@ -78,6 +78,8 @@ export interface Building {
     address: string;
     name?: string; // Component uses b.name
     totalRooms?: number; // Component uses b.totalRooms
+    landlord_name?: string | null;
+    landlord_address?: string | null;
     created_at?: string;
 }
 

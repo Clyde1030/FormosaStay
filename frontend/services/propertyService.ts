@@ -156,8 +156,17 @@ export const getTenantById = async (tenantId: number): Promise<TenantWithContrac
             room: tenant.active_lease?.room ? {
                 id: tenant.active_lease.room.id,
                 roomNumber: tenant.active_lease.room.roomNumber || `${tenant.active_lease.room.floor_no}${tenant.active_lease.room.room_no}`,
-                building_id: tenant.active_lease.room.building_id
-            } : undefined
+                building_id: tenant.active_lease.room.building_id,
+                floor_no: tenant.active_lease.room.floor_no,
+                room_no: tenant.active_lease.room.room_no
+            } : tenant.room ? {
+                id: tenant.room.id,
+                roomNumber: tenant.room.roomNumber || `${tenant.room.floor_no}${tenant.room.room_no}`,
+                building_id: tenant.room.building_id,
+                floor_no: tenant.room.floor_no,
+                room_no: tenant.room.room_no
+            } : undefined,
+            building: tenant.building || undefined
         };
     } catch (error) {
         console.error('Error fetching tenant by ID:', error);
@@ -229,7 +238,12 @@ export const getTenantInRoom = async (roomId: any): Promise<TenantWithContract |
                 roomNumber: tenantData.room_number || `${tenantData.floor_no}${tenantData.room_no}`,
                 size_ping: tenantData.size_ping || 0,
                 currentMeterReading: tenantData.currentMeterReading || 0
-            }
+            },
+            building: tenantData.building_id ? {
+                id: tenantData.building_id,
+                building_no: tenantData.building_no,
+                address: tenantData.building_address
+            } : undefined
         };
     } catch (error) {
         console.error('Error fetching tenant in room:', error);
@@ -877,4 +891,14 @@ export const getDashboardStats = async () => {
         overdueTotal: stats.overdueTotal || 0,
         overdueCount: stats.overdueCount || 0
     };
+};
+
+export const getManager = async (): Promise<{ name: string | null; phone: string | null }> => {
+    try {
+        const data = await apiClient.get<{ name: string | null; phone: string | null }>('/users/manager');
+        return data;
+    } catch (error) {
+        console.error('Error fetching manager:', error);
+        return { name: null, phone: null };
+    }
 };

@@ -1,7 +1,8 @@
 # app/routers/tenants.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.orm import selectinload
 from typing import List
 import json
 import re
@@ -9,6 +10,7 @@ import re
 from app.db.session import get_db
 from app.models.tenant import Tenant
 from app.models.lease import Lease, LeaseTenant
+from app.models.room import Room
 from app.schemas.tenant import TenantCreate
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
@@ -133,6 +135,7 @@ async def list_tenants(
                 "building": {
                     "id": tenant_dict['building_id'],
                     "building_no": tenant_dict['building_no'],
+                    "address": tenant_dict.get('building_address'),
                 } if tenant_dict['building_id'] else None,
             })
         
@@ -178,6 +181,24 @@ async def get_tenant(tenant_id: int, db: AsyncSession = Depends(get_db)):
         if tenant_dict.get('lease_assets'):
             if isinstance(tenant_dict['lease_assets'], str):
                 tenant_dict['lease_assets'] = json.loads(tenant_dict['lease_assets'])
+        
+        # Fetch building landlord info if building_id exists
+        building_landlord_info = None
+        if tenant_dict.get('building_id'):
+            building_result = await db.execute(
+                text("""
+                    SELECT landlord_name, landlord_address 
+                    FROM building 
+                    WHERE id = :building_id AND deleted_at IS NULL
+                """),
+                {"building_id": tenant_dict['building_id']}
+            )
+            building_row = building_result.mappings().first()
+            if building_row:
+                building_landlord_info = {
+                    "landlord_name": building_row['landlord_name'],
+                    "landlord_address": building_row['landlord_address'],
+                }
         
         return {
             "id": tenant_dict['tenant_id'],
@@ -225,6 +246,9 @@ async def get_tenant(tenant_id: int, db: AsyncSession = Depends(get_db)):
             "building": {
                 "id": tenant_dict['building_id'],
                 "building_no": tenant_dict['building_no'],
+                "address": tenant_dict.get('building_address'),
+                "landlord_name": building_landlord_info['landlord_name'] if building_landlord_info else None,
+                "landlord_address": building_landlord_info['landlord_address'] if building_landlord_info else None,
             } if tenant_dict['building_id'] else None,
         }
     except HTTPException:
@@ -290,32 +314,23 @@ async def update_tenant(
         created_by=None  # TODO: Get from auth context when auth is implemented
     )
     
-    # Reload with relationships
-    # Note: If tenant has a lease, we need to refresh lease_tenants carefully
-    # to avoid issues if the lease relationship has constraints
-    try:
-        await db.refresh(updated_tenant, ["emergency_contacts", "lease_tenants"])
-    except Exception as e:
-        # If refresh fails, still try to get the tenant data
-        # This can happen if there are relationship loading issues
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Could not refresh all relationships for tenant {tenant_id}: {str(e)}")
-        # Try to refresh just emergency_contacts
-        try:
-            await db.refresh(updated_tenant, ["emergency_contacts"])
-        except:
-            pass
+    # Reload tenant with all relationships eagerly loaded to avoid lazy loading issues
+    # This is necessary because accessing lt.lease triggers lazy loading which fails in async context
+    result = await db.execute(
+        select(Tenant)
+        .where(Tenant.id == tenant_id)
+        .options(
+            selectinload(Tenant.emergency_contacts),
+            selectinload(Tenant.lease_tenants).selectinload(LeaseTenant.lease).selectinload(Lease.room).selectinload(Room.building)
+        )
+    )
+    updated_tenant = result.scalar_one()
     
     # Get active lease through lease_tenants relationship (use computed status)
     active_lease = None
     for lt in updated_tenant.lease_tenants:
         if lt.lease.get_status() == "active" and (lt.lease.deleted_at is None):
             active_lease = lt.lease
-            # Load room relationship
-            await db.refresh(lt.lease, ["room"])
-            if lt.lease.room:
-                await db.refresh(lt.lease.room, ["building"])
             break
     
     return {

@@ -1,13 +1,6 @@
 import html2pdf from 'html2pdf.js';
 import { TenantWithContract, UILabels } from '../types';
-
-// Landlord information (from the contract template)
-const LANDLORD_INFO = {
-    name: '信毅',
-    address: '後壁區新嘉里白沙屯 120號之12',
-    phone: '0921631690',
-    manager: '楊月香'
-};
+import { getManager } from './propertyService';
 
 // Convert Gregorian date to ROC (Republic of China) calendar format
 const toROCDate = (dateString: string): { year: number; month: number; day: number } => {
@@ -82,12 +75,22 @@ const getAssetCounts = (itemsIssued: any[]): { keys: number; cards: number; remo
 };
 
 // Create HTML template for the contract
-const createContractHTML = (tenant: TenantWithContract): string => {
-    const contract = tenant.currentContract!;
-    const room = tenant.room!;
-    const building = tenant.building!;
+const createContractHTML = (tenant: TenantWithContract, landlordInfo: { name: string | null; address: string | null }, managerInfo: { name: string | null; phone: string | null }): string => {
+    const contract = tenant.currentContract;
+    const room = tenant.room;
+    const building = tenant.building;
     
-    const propertyAddress = `${building.address || ''}${room.floor_no}樓${room.room_no}室`.trim();
+    if (!contract) {
+        throw new Error('Contract information is missing');
+    }
+    if (!room) {
+        throw new Error('Room information is missing');
+    }
+    if (!building) {
+        throw new Error('Building information is missing');
+    }
+    
+    const propertyAddress = `${building.address || ''}${room.floor_no || ''}樓${room.room_no || ''}室`.trim();
     const rentalPeriod = calculateRentalPeriod(contract.startDate, contract.endDate);
     const startROCDate = formatROCDate(contract.startDate);
     const endROCDate = formatROCDate(contract.endDate);
@@ -252,12 +255,12 @@ const createContractHTML = (tenant: TenantWithContract): string => {
         
         <div class="party-section">
             <div class="party-title">甲方出租人</div>
-            <div class="landlord-seal">${LANDLORD_INFO.name}</div>
+            <div class="landlord-seal">${landlordInfo.name}</div>
             <div class="party-info">
-                戶籍地址：${LANDLORD_INFO.address}<br>
+                戶籍地址：${landlordInfo.address}<br>
                 身份証字號：<br>
-                電話：${LANDLORD_INFO.phone}<br>
-                管理員：${LANDLORD_INFO.manager}
+                電話：${managerInfo.phone}<br>
+                管理員：${managerInfo.name}
             </div>
         </div>
         
@@ -284,17 +287,40 @@ const createContractHTML = (tenant: TenantWithContract): string => {
 };
 
 export const generateContractPDF = async (tenant: TenantWithContract): Promise<void> => {
-    if (!tenant.currentContract || !tenant.room || !tenant.building) {
-        alert(UILabels.contractGenerationError.en);
+    // Validate required data
+    if (!tenant.currentContract) {
+        console.error('Missing contract data:', tenant);
+        alert('Cannot generate contract: No contract information available');
         return;
+    }
+    if (!tenant.room) {
+        console.error('Missing room data:', tenant);
+        alert('Cannot generate contract: No room information available');
+        return;
+    }
+    if (!tenant.building) {
+        console.error('Missing building data:', tenant);
+        alert('Cannot generate contract: No building information available');
+        return;
+    }
+    if (!tenant.building.address) {
+        console.warn('Building address is missing, contract may have incomplete address information');
     }
 
     try {
+        // Fetch landlord and manager information
+        const landlordInfo = {
+            name: tenant.building?.landlord_name || null,
+            address: tenant.building?.landlord_address || null
+        };
+        
+        const managerInfo = await getManager();
+        
         // Create a temporary container for the HTML
         const container = document.createElement('div');
         container.style.position = 'absolute';
         container.style.left = '-9999px';
-        container.innerHTML = createContractHTML(tenant);
+        container.innerHTML = createContractHTML(tenant, landlordInfo, managerInfo);
         document.body.appendChild(container);
 
         // Configure html2pdf options
@@ -321,6 +347,7 @@ export const generateContractPDF = async (tenant: TenantWithContract): Promise<v
         document.body.removeChild(container);
     } catch (error) {
         console.error('Error generating PDF:', error);
-        alert(UILabels.pdfGenerationError.en);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        alert(`${UILabels.pdfGenerationError.en}\n\nError: ${errorMessage}`);
     }
 };
