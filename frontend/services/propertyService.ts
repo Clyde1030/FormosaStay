@@ -32,8 +32,9 @@ export const getRooms = async (buildingId?: number): Promise<Room[]> => {
     }));
 };
 
-export const getTenants = async (): Promise<Tenant[]> => {
-    const data = await apiClient.get<any[]>('/tenants/');
+export const getTenants = async (search?: string): Promise<Tenant[]> => {
+    const params = search ? { search } : {};
+    const data = await apiClient.get<any[]>('/tenants/', { params });
     return data.map(t => ({
         ...t,
         name: t.name || `${t.last_name}${t.first_name}`,
@@ -43,10 +44,10 @@ export const getTenants = async (): Promise<Tenant[]> => {
     }));
 };
 
-export const fetchTenantsWithDetails = async (): Promise<TenantWithLease[]> => {
+export const fetchTenantsWithDetails = async (search?: string): Promise<TenantWithLease[]> => {
     // Get tenants from the view which already includes active lease info
     // The API response may include active_lease, room, and building even though Tenant type doesn't have them
-    const tenants = await getTenants();
+    const tenants = await getTenants(search);
     
     return tenants.map(t => {
         const tenantData = t as any; // API response includes additional fields

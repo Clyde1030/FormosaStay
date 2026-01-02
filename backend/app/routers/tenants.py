@@ -1,10 +1,10 @@
 # app/routers/tenants.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
-from sqlalchemy.orm import selectinload
+from sqlalchemy import text
 from typing import List
 import json
+import re
 
 from app.db.session import get_db
 from app.models.tenant import Tenant
@@ -19,16 +19,54 @@ async def list_tenants(
     db: AsyncSession = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
+    search: str = Query(None, description="Search by tenant name or room format (e.g., '6.1A')"),
 ):
     """List all tenants using v_tenant_complete view"""
     try:
+        # Build WHERE clause based on search parameter
+        where_clause = ""
+        params = {"limit": limit, "offset": skip}
+        
+        if search:
+            search_lower = search.strip().lower()
+            # Check if search matches room format: building.floor_room (e.g., "6.1A")
+            room_pattern = re.match(r'^(\d+)\.(\d+)([a-zA-Z]+)$', search)
+            
+            if room_pattern:
+                # Search by building and room format
+                building_no = room_pattern.group(1)
+                floor_no = room_pattern.group(2)
+                room_no = room_pattern.group(3)
+                where_clause = """
+                    WHERE building_no = :building_no 
+                    AND floor_no = :floor_no 
+                    AND room_no = :room_no
+                """
+                params.update({
+                    "building_no": int(building_no),
+                    "floor_no": int(floor_no),
+                    "room_no": room_no
+                })
+            else:
+                # Search by tenant name (first_name, last_name, or full name)
+                where_clause = """
+                    WHERE (
+                        LOWER(first_name) LIKE :search_pattern 
+                        OR LOWER(last_name) LIKE :search_pattern
+                        OR LOWER(CONCAT(last_name, first_name)) LIKE :search_pattern
+                        OR LOWER(CONCAT(first_name, ' ', last_name)) LIKE :search_pattern
+                    )
+                """
+                params["search_pattern"] = f"%{search_lower}%"
+        
         result = await db.execute(
-            text("""
+            text(f"""
                 SELECT * FROM v_tenant_complete 
+                {where_clause}
                 ORDER BY last_name, first_name
                 LIMIT :limit OFFSET :offset
             """),
-            {"limit": limit, "offset": skip}
+            params
         )
         rows = result.mappings().all()
         

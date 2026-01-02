@@ -13,10 +13,10 @@ const TenantList: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedTenant, setSelectedTenant] = useState<TenantWithContract | null>(null);
 
-    const loadTenants = async () => {
+    const loadTenants = async (search?: string) => {
         setLoading(true);
         try {
-            const data = await fetchTenantsWithDetails();
+            const data = await fetchTenantsWithDetails(search);
             setTenants(data);
         } catch (e) {
             console.error(e);
@@ -25,15 +25,25 @@ const TenantList: React.FC = () => {
         }
     };
 
+    // Load tenants on mount and when search term changes (debounced)
     useEffect(() => {
-        loadTenants();
-    }, []);
+        const timeoutId = setTimeout(() => {
+            loadTenants(searchTerm || undefined);
+        }, searchTerm ? 300 : 0); // No delay on initial load, 300ms delay when searching
 
-    const filteredTenants = tenants.filter(t => 
-        `${t.last_name}${t.first_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        `${t.last_name} ${t.first_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.room?.room_no?.includes(searchTerm)
-    );
+        return () => clearTimeout(timeoutId);
+    }, [searchTerm]);
+
+    // Helper function to format location as "building.floor_room" (e.g., "6.1A")
+    const formatLocation = (tenant: TenantWithLease): string => {
+        if (tenant.building && tenant.room) {
+            return `${tenant.building.building_no}.${tenant.room.floor_no}${tenant.room.room_no}`;
+        }
+        if (tenant.room) {
+            return `${tenant.room.floor_no}${tenant.room.room_no}`;
+        }
+        return '';
+    };
 
     return (
         <div className="space-y-6 h-full flex flex-col">
@@ -56,7 +66,7 @@ const TenantList: React.FC = () => {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     <input 
                         type="text" 
-                        placeholder="Search by name or room..." 
+                        placeholder="Search by name or room (e.g., 6.1A)..." 
                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -79,7 +89,7 @@ const TenantList: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filteredTenants.map(t => (
+                            {tenants.map(t => (
                                 <tr 
                                     key={t.id} 
                                     className="hover:bg-slate-50 transition-colors cursor-pointer"
@@ -130,12 +140,10 @@ const TenantList: React.FC = () => {
                                         <div className="text-xs text-slate-400">{t.personal_id}</div>
                                     </td>
                                     <td className="p-4">
-                                        {t.room && t.building ? (
+                                        {formatLocation(t) ? (
                                             <div className="text-sm font-medium">
-                                                Building {t.building.building_no} - Floor {t.room.floor_no} Room {t.room.room_no}
+                                                {formatLocation(t)}
                                             </div>
-                                        ) : t.room ? (
-                                            <div className="text-sm font-medium">{t.room.roomNumber || `Floor ${t.room.floor_no} Room ${t.room.room_no}`}</div>
                                         ) : (
                                             <span className="text-slate-400 italic text-sm">Vacant</span>
                                         )}
