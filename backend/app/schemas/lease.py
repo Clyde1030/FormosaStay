@@ -127,7 +127,7 @@ class LeaseTerminate(BaseModel):
 class LeaseTenantResponse(BaseModel):
     """Schema for lease-tenant relationship response"""
     tenant_id: int
-    tenant_role: str  # '主要' or '次要'
+    tenant_role: str  # 'primary' or 'secondary'
     joined_at: Optional[date] = None
 
     class Config:

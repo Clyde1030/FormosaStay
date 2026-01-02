@@ -512,6 +512,16 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                         <CreditCard size={20} className="text-brand-500"/> Current Contract
                                     </h3>
                                     <div className="flex gap-2">
+                                        {/* Edit Contract button - show for draft and pending contracts */}
+                                        {(tenant.currentContract?.status === ContractStatus.DRAFT || tenant.currentContract?.status === ContractStatus.PENDING) && !isEditing && (
+                                            <button 
+                                                onClick={() => setIsEditing(true)}
+                                                className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-1"
+                                                title="Edit contract details"
+                                            >
+                                                <Edit size={14}/> Edit Contract
+                                            </button>
+                                        )}
                                         {/* Submit Contract button - only show for draft leases that haven't been submitted */}
                                         {tenant.currentContract?.status === ContractStatus.DRAFT && !tenant.currentContract?.submitted_at && (
                                             <button 
@@ -583,7 +593,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Rent Amount (Monthly Base)</label>
-                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
+                                                {isEditing && editContract && (tenant.currentContract.status === ContractStatus.DRAFT || tenant.currentContract.status === ContractStatus.PENDING) ? (
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-sm">NT$</span>
                                                         <input className="w-24 border rounded px-1" type="number" value={editContract.rentAmount} onChange={e => setEditContract({...editContract, rentAmount: Number(e.target.value)})} />
@@ -594,7 +604,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Payment Frequency</label>
-                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
+                                                {isEditing && editContract && (tenant.currentContract.status === ContractStatus.DRAFT || tenant.currentContract.status === ContractStatus.PENDING) ? (
                                                     <select 
                                                         className="w-full border rounded px-1 text-sm py-1" 
                                                         value={editContract.paymentFrequency} 
@@ -610,7 +620,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Vehicle Plate</label>
-                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
+                                                {isEditing && editContract && (tenant.currentContract.status === ContractStatus.DRAFT || tenant.currentContract.status === ContractStatus.PENDING) ? (
                                                     <input 
                                                         className="w-full border rounded px-1 text-sm py-1" 
                                                         value={editContract.vehicle_plate || ''} 
@@ -623,7 +633,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Duration</label>
-                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
+                                                {isEditing && editContract && (tenant.currentContract.status === ContractStatus.DRAFT || tenant.currentContract.status === ContractStatus.PENDING) ? (
                                                     <div className="flex flex-col gap-1">
                                                         <input type="date" className="border rounded px-1 text-sm" value={editContract.startDate} onChange={e => setEditContract({...editContract, startDate: e.target.value})} />
                                                         <input type="date" className="border rounded px-1 text-sm" value={editContract.endDate} onChange={e => setEditContract({...editContract, endDate: e.target.value})} />
@@ -636,7 +646,7 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                             </div>
                                             <div>
                                                 <label className="text-xs text-slate-400">Deposit</label>
-                                                {isEditing && editContract && !tenant.currentContract.submitted_at ? (
+                                                {isEditing && editContract && (tenant.currentContract.status === ContractStatus.DRAFT || tenant.currentContract.status === ContractStatus.PENDING) ? (
                                                      <div className="flex items-center gap-1">
                                                         <span className="text-sm">NT$</span>
                                                         <input className="w-24 border rounded px-1" type="number" value={editContract.depositAmount} onChange={e => setEditContract({...editContract, depositAmount: Number(e.target.value)})} />
