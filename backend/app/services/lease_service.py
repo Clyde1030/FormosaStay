@@ -34,7 +34,7 @@ def get_primary_tenant_info(lease: Lease) -> str:
     primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
     if primary_tenant_relation:
         tenant = primary_tenant_relation.tenant
-        tenant_name = f"{tenant.first_name} {tenant.last_name}"
+        tenant_name = f"{tenant.last_name} {tenant.first_name}"
         return f"Tenant: {tenant_name} (ID: {tenant.id})"
     else:
         return f"Lease ID: {lease.id}"
@@ -56,6 +56,9 @@ def determine_lease_status(lease: Lease, today: Optional[date] = None) -> LeaseS
     
     terminated_at = lease.terminated_at
     
+    # Terminated takes precedence over expired: a lease that was explicitly terminated
+    # should be marked as terminated even if it has also passed its end_date.
+    # Termination is an explicit action that overrides the natural expiration.
     if terminated_at is not None:
         return "terminated"
     elif today > lease.end_date:
@@ -138,6 +141,46 @@ async def assert_lease_editable(
         )
     
     await assert_no_financial_activity(db, lease.id)
+
+
+async def find_overlapping_submitted_lease(
+    db: AsyncSession,
+    *,
+    room_id: int,
+    start_date: date,
+    end_date: date,
+    exclude_lease_id: Optional[int] = None
+) -> Optional[Lease]:
+    """
+    Find an overlapping submitted lease for the given room and date range.
+    
+    Returns the first overlapping lease found, or None if no overlap exists.
+    
+    Overlap rules:
+    - same room_id
+    - submitted_at IS NOT NULL (submitted leases only)
+    - terminated_at IS NULL (not terminated)
+    - deleted_at IS NULL (not deleted)
+    - date overlap: start_date <= existing.end_date AND end_date >= existing.start_date
+    - exclude exclude_lease_id if provided
+    """
+    conditions = [
+        Lease.room_id == room_id,
+        ~Lease.submitted_at.is_(None),  # Submitted leases
+        Lease.terminated_at.is_(None),  # Not terminated
+        Lease.deleted_at.is_(None),     # Not deleted
+        # Date range overlap: start_date <= existing.end_date AND end_date >= existing.start_date
+        start_date <= Lease.end_date,
+        end_date >= Lease.start_date
+    ]
+    
+    if exclude_lease_id is not None:
+        conditions.append(Lease.id != exclude_lease_id)
+    
+    result = await db.execute(
+        select(Lease).where(and_(*conditions))
+    )
+    return result.scalar_one_or_none()
 
 
 class LeaseService:
@@ -253,23 +296,22 @@ class LeaseService:
         # - not terminated
         # - not deleted
         # - AND overlap with the new lease period
-        existing_lease_result = await db.execute(
-            select(Lease)
-            .where(
-                and_(
-                    Lease.room_id == lease_data.room_id,
-                    ~Lease.submitted_at.is_(None),  # Submitted leases (pending or active)
-                    Lease.terminated_at.is_(None),  # Not terminated
-                    Lease.deleted_at.is_(None),     # Not deleted
-                    # Date range overlap: new_start <= existing_end AND new_end >= existing_start
-                    lease_data.start_date <= Lease.end_date,
-                    lease_data.end_date >= Lease.start_date
-                )
-            )
-            .options(selectinload(Lease.tenants).selectinload(LeaseTenant.tenant))
+        # Note: Draft leases do NOT block room availability. Only submitted leases (pending/active)
+        # reserve the room, allowing multiple draft leases to exist for the same room/period.
+        existing_lease = await find_overlapping_submitted_lease(
+            db,
+            room_id=lease_data.room_id,
+            start_date=lease_data.start_date,
+            end_date=lease_data.end_date
         )
-        existing_lease = existing_lease_result.scalar_one_or_none()
         if existing_lease:
+            # Load tenants for error message (reload with relationships)
+            existing_lease_result = await db.execute(
+                select(Lease)
+                .where(Lease.id == existing_lease.id)
+                .options(selectinload(Lease.tenants).selectinload(LeaseTenant.tenant))
+            )
+            existing_lease = existing_lease_result.scalar_one()
             # Get primary tenant
             primary_tenant_relation = next((lt for lt in existing_lease.tenants if lt.tenant_role == 'primary'), None)
             existing_lease_status = determine_lease_status(existing_lease)
@@ -503,6 +545,28 @@ class LeaseService:
                 detail=f"Cannot submit lease with status '{current_status}'. Only draft leases can be submitted. {tenant_info}"
             )
         
+        # Check for overlapping submitted leases in the same room
+        # This overlap check is necessary because:
+        # 1. Draft leases don't block room availability (see create_lease)
+        # 2. When a lease transitions from draft to submitted, it becomes room-reserving
+        # 3. Another draft lease created earlier for the same room/period may have been submitted
+        #    in the meantime, creating a conflict that didn't exist at creation time
+        # Date range overlap: lease.start_date <= existing.end_date AND lease.end_date >= existing.start_date
+        overlapping_lease = await find_overlapping_submitted_lease(
+            db,
+            room_id=lease.room_id,
+            start_date=lease.start_date,
+            end_date=lease.end_date,
+            exclude_lease_id=lease.id
+        )
+        if overlapping_lease:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot submit lease: room {lease.room_id} already has a submitted lease (lease_id: {overlapping_lease.id}, "
+                       f"period: {overlapping_lease.start_date} to {overlapping_lease.end_date}) that overlaps with this lease period "
+                       f"({lease.start_date} to {lease.end_date}). {tenant_info}"
+            )
+        
         # Check 3 & 4: no invoices or cashflows must exist
         await assert_no_financial_activity(db, lease.id)
         
@@ -561,6 +625,23 @@ class LeaseService:
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"new_end_date ({renew_data.new_end_date}) must be after current end_date ({lease.end_date}). {tenant_info}"
+            )
+
+        # Check for overlapping submitted leases in the same room
+        # Date range overlap: lease.start_date <= existing.end_date AND renew_data.new_end_date >= existing.start_date
+        overlapping_lease = await find_overlapping_submitted_lease(
+            db,
+            room_id=lease.room_id,
+            start_date=lease.start_date,
+            end_date=renew_data.new_end_date,
+            exclude_lease_id=lease.id
+        )
+        if overlapping_lease:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot renew lease: room {lease.room_id} already has a submitted lease (lease_id: {overlapping_lease.id}, "
+                       f"period: {overlapping_lease.start_date} to {overlapping_lease.end_date}) that overlaps with the proposed renewal period "
+                       f"({lease.start_date} to {renew_data.new_end_date}). {tenant_info}"
             )
 
         # Update lease fields
