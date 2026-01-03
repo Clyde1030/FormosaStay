@@ -23,6 +23,23 @@ from decimal import Decimal
 LeaseStatus = Literal["draft", "pending", "active", "expired", "terminated"]
 
 
+def get_primary_tenant_info(lease: Lease) -> str:
+    """
+    Get formatted primary tenant information for a lease.
+    
+    Returns:
+        "Tenant: First Last (ID: X)" if primary tenant exists,
+        otherwise "Lease ID: {lease.id}"
+    """
+    primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
+    if primary_tenant_relation:
+        tenant = primary_tenant_relation.tenant
+        tenant_name = f"{tenant.first_name} {tenant.last_name}"
+        return f"Tenant: {tenant_name} (ID: {tenant.id})"
+    else:
+        return f"Lease ID: {lease.id}"
+
+
 def determine_lease_status(lease: Lease, today: Optional[date] = None) -> LeaseStatus:
     """
     Determine lease status from facts.
@@ -468,13 +485,7 @@ class LeaseService:
             )
         
         # Get primary tenant for info messages
-        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
-        if primary_tenant_relation:
-            tenant = primary_tenant_relation.tenant
-            tenant_name = f"{tenant.first_name} {tenant.last_name}"
-            tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
-        else:
-            tenant_info = f"Lease ID: {lease_id}"
+        tenant_info = get_primary_tenant_info(lease)
         
         # Check 1: submitted_at must be NULL (idempotency check)
         if lease.submitted_at is not None:
@@ -535,13 +546,7 @@ class LeaseService:
             )
 
         # Get primary tenant for info messages
-        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
-        if primary_tenant_relation:
-            tenant = primary_tenant_relation.tenant
-            tenant_name = f"{tenant.first_name} {tenant.last_name}"
-            tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
-        else:
-            tenant_info = f"Lease ID: {lease_id}"
+        tenant_info = get_primary_tenant_info(lease)
 
         # Check if lease is active
         current_status = determine_lease_status(lease)
@@ -610,13 +615,7 @@ class LeaseService:
             )
 
         # Get primary tenant for info messages
-        primary_tenant_relation = next((lt for lt in lease.tenants if lt.tenant_role == 'primary'), None)
-        if primary_tenant_relation:
-            tenant = primary_tenant_relation.tenant
-            tenant_name = f"{tenant.first_name} {tenant.last_name}"
-            tenant_info = f"Tenant: {tenant_name} (ID: {tenant.id})"
-        else:
-            tenant_info = f"Lease ID: {lease_id}"
+        tenant_info = get_primary_tenant_info(lease)
 
         # Check if lease can be terminated (must be active or pending)
         current_status = determine_lease_status(lease)
