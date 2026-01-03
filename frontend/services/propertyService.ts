@@ -281,12 +281,10 @@ export const getRoomElectricityHistory = async (roomId: any): Promise<any[]> => 
 
 export const getExpenses = async (): Promise<Expense[]> => {
     try {
-        const data = await apiClient.get<any[]>('/cash-flow/');
+        // Backend filters expenses by direction=out server-side
+        const data = await apiClient.get<any[]>('/cash-flow/?direction=out');
         
-        // Filter for expenses (direction = 'out')
-        const expenses = data.filter(cf => cf.category_direction === 'out' || cf.direction === 'out');
-        
-        return expenses.map(cf => ({
+        return data.map(cf => ({
             id: cf.id?.toString() || '',
             category: cf.category_name || cf.category_code || '',
             amount: Number(cf.amount) || 0,

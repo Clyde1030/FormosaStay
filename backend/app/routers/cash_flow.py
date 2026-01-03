@@ -48,15 +48,22 @@ async def list_cash_flow_categories(
 
 @router.get("/", response_model=List[dict])
 async def list_cash_flows(
+    direction: Optional[str] = Query(None, description="Filter by direction ('in', 'out', 'transfer')"),
     db: AsyncSession = Depends(get_db)
 ):
-    """List all cash flow entries"""
+    """List all cash flow entries, optionally filtered by direction"""
     try:
-        result = await db.execute(
+        query = (
             select(CashFlow, CashFlowCategory)
             .join(CashFlowCategory, CashFlow.category_id == CashFlowCategory.id)
-            .order_by(CashFlow.flow_date.desc())
         )
+        
+        if direction:
+            query = query.where(CashFlowCategory.direction == direction)
+        
+        query = query.order_by(CashFlow.flow_date.desc())
+        
+        result = await db.execute(query)
         flows = result.all()
         
         return [

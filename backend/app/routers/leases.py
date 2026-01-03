@@ -15,6 +15,7 @@ from app.schemas.lease import (
     LeaseAmend,
     LeaseResponse,
     LeaseAmendmentResponse,
+    LeaseTenantResponse,
     ProrationCalculationRequest,
     ProrationCalculationResponse,
 )
@@ -30,6 +31,16 @@ def build_lease_response(lease: Lease) -> LeaseResponse:
     
     # Recalculate status on read
     current_status = determine_lease_status(lease)
+    
+    # Build tenants using LeaseTenantResponse schema for validation
+    tenants = [
+        LeaseTenantResponse(
+            tenant_id=lt.tenant_id,
+            tenant_role=lt.tenant_role,
+            joined_at=lt.joined_at
+        )
+        for lt in lease.tenants
+    ]
     
     # Build lease dict
     lease_dict = {
@@ -47,14 +58,7 @@ def build_lease_response(lease: Lease) -> LeaseResponse:
         'status': current_status,
         'vehicle_plate': lease.vehicle_plate,
         'assets': lease.assets,
-        'tenants': [
-            {
-                'tenant_id': lt.tenant_id,
-                'tenant_role': lt.tenant_role,
-                'joined_at': lt.joined_at
-            }
-            for lt in lease.tenants
-        ],
+        'tenants': tenants,
         'tenant_id': primary_tenant.tenant_id if primary_tenant else None,
         'created_at': lease.created_at.isoformat() if lease.created_at else None,
         'updated_at': lease.updated_at.isoformat() if lease.updated_at else None,
@@ -129,17 +133,7 @@ async def update_lease(
     Lease fields (start_date, end_date, monthly_rent, etc.) can only be updated when the lease is editable (draft status, no invoices, no cashflows).
     All business logic is handled in the service layer.
     """
-    # Convert Pydantic model to dict, excluding None values
-    update_dict = lease_data.model_dump(exclude_unset=True)
-    
-    # Convert assets if provided
-    if 'assets' in update_dict and update_dict['assets'] is not None:
-        update_dict['assets'] = [
-            {"type": asset.type, "quantity": asset.quantity}
-            for asset in lease_data.assets
-        ]
-    
-    lease = await LeaseService.update_lease(db, lease_id, update_dict)
+    lease = await LeaseService.update_lease(db, lease_id, lease_data)
     return build_lease_response(lease)
 
 
@@ -197,10 +191,7 @@ async def amend_lease(
     amendment = await LeaseService.create_amendment(
         db,
         lease_id,
-        amend_data.effective_date,
-        amend_data.old_rent,
-        amend_data.new_rent,
-        amend_data.reason
+        amend_data
     )
     return LeaseAmendmentResponse(
         id=amendment.id,

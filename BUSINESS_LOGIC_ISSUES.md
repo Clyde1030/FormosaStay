@@ -6,7 +6,7 @@ This document identifies business logic that is currently implemented in the fro
 
 Found **12 major areas** where business logic should be moved to the backend:
 
-- **7 REMAINING** ⚠️ (still in frontend)
+- **6 REMAINING** ⚠️ (still in frontend)
 
 ## ⚠️ REMAINING Issues (Still in Frontend)
 
@@ -39,24 +39,7 @@ method: p.payment_method === 'bank' ? 'Transfer' :
 
 ---
 
-### 7. Expense Filtering by Direction
-**Location:** `frontend/services/propertyService.ts` - `getExpenses`
-
-**Line:** 287
-
-**Issue:**
-```typescript
-const expenses = data.filter(cf => cf.category_direction === 'out' || cf.direction === 'out');
-```
-
-**Should be:**
-- Backend should provide a query parameter: `/cash-flow/?direction=out` or `/cash-flow/expenses`
-- Filtering should be done server-side
-- Frontend should not need to filter all cash flows client-side
-
----
-
-### 8. Room Status Filtering
+### 7. Room Status Filtering
 **Location:** `frontend/components/FinanceManager.tsx` - `ElectricityTab`
 
 **Line:** 204
@@ -73,7 +56,7 @@ const occupiedRooms = rooms.filter(r => r.status === 'Occupied');
 
 ---
 
-### 9. Data Filtering and Aggregation for Charts
+### 8. Data Filtering and Aggregation for Charts
 **Location:** Multiple components
 
 **Issues:**
@@ -90,7 +73,7 @@ const occupiedRooms = rooms.filter(r => r.status === 'Occupied');
 
 ---
 
-### 10. Building/Room Name Formatting and Lookup
+### 9. Building/Room Name Formatting and Lookup
 **Location:** Multiple components and services
 
 **Issues:**
@@ -109,7 +92,7 @@ const occupiedRooms = rooms.filter(r => r.status === 'Occupied');
 
 ---
 
-### 11. Floor/Room Filtering Logic
+### 10. Floor/Room Filtering Logic
 **Location:** `frontend/components/FinanceManager.tsx` - `ExpensesTab`
 
 **Lines:** 377-388
@@ -137,7 +120,7 @@ const availableRooms = rooms.filter(r => {
 
 ---
 
-### 12. Category Lookup and Mapping
+### 11. Category Lookup and Mapping
 **Location:** `frontend/services/propertyService.ts`
 
 **Lines:** 362, 513, 562
@@ -161,14 +144,13 @@ const category = categories.find(c => c.chinese_name === ex.category);
 ### Medium Priority (Data Consistency)
 5. **Payment status/category mapping** - Should be standardized (partially fixed in `getTransactionsByRoom`)
 6. **Data filtering for charts** - Performance and consistency
-7. **Expense filtering** - Should use backend query parameters
-8. **Category lookup** - Should use backend resolution
+7. **Category lookup** - Should use backend resolution
 
 ### Low Priority (Optimization)
-9. **Room status filtering** - Can be optimized with backend query
-10. **Building/room name lookup** - Can be optimized with better API responses
-11. **Floor/room filtering** - Can be optimized with hierarchical endpoints
-12. **Name/display formatting** - Can be optimized with backend formatting
+8. **Room status filtering** - Can be optimized with backend query
+9. **Building/room name lookup** - Can be optimized with better API responses
+10. **Floor/room filtering** - Can be optimized with hierarchical endpoints
+11. **Name/display formatting** - Can be optimized with backend formatting
 
 ---
 
@@ -199,10 +181,10 @@ When moving remaining logic to the backend:
 
 ## Progress Summary
 
-- **Fixed:** 5/12 issues (42%)
-- **Remaining:** 7/12 issues (58%)
+- **Fixed:** 6/12 issues (50%)
+- **Remaining:** 6/12 issues (50%)
 - **Critical Issues:** All fixed ✅
-- **Medium Priority:** 4 remaining
+- **Medium Priority:** 3 remaining
 - **Low Priority:** 3 remaining
 
 ---
