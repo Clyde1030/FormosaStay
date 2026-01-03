@@ -54,6 +54,47 @@ def determine_lease_status(lease: Lease, today: Optional[date] = None) -> LeaseS
         return "active"
 
 
+async def assert_no_financial_activity(db: AsyncSession, lease_id: int) -> None:
+    """
+    Assert that no financial activity (invoices or cashflows) exists for a lease.
+    
+    Raises LeaseNotEditableError if invoices or cashflows exist.
+    """
+    # Check for invoices
+    invoice_count = await db.execute(
+        select(func.count(Invoice.id)).where(
+            and_(
+                Invoice.lease_id == lease_id,
+                Invoice.deleted_at.is_(None)
+            )
+        )
+    )
+    invoice_count = invoice_count.scalar() or 0
+    
+    if invoice_count > 0:
+        raise LeaseNotEditableError(
+            f"Cannot edit lease: {invoice_count} invoice(s) exist for this lease. "
+            "Financial history must remain immutable."
+        )
+    
+    # Check for cashflows
+    cashflow_count = await db.execute(
+        select(func.count(CashFlow.id)).where(
+            and_(
+                CashFlow.lease_id == lease_id,
+                CashFlow.deleted_at.is_(None)
+            )
+        )
+    )
+    cashflow_count = cashflow_count.scalar() or 0
+    
+    if cashflow_count > 0:
+        raise LeaseNotEditableError(
+            f"Cannot edit lease: {cashflow_count} cashflow(s) exist for this lease. "
+            "Financial history must remain immutable."
+        )
+
+
 async def assert_lease_editable(
     db: AsyncSession,
     lease: Lease,
@@ -79,39 +120,7 @@ async def assert_lease_editable(
             f"Cannot edit lease with status '{status}'. Only draft or pending leases can be edited."
         )
     
-    # Check for invoices
-    invoice_count = await db.execute(
-        select(func.count(Invoice.id)).where(
-            and_(
-                Invoice.lease_id == lease.id,
-                Invoice.deleted_at.is_(None)
-            )
-        )
-    )
-    invoice_count = invoice_count.scalar() or 0
-    
-    if invoice_count > 0:
-        raise LeaseNotEditableError(
-            f"Cannot edit lease: {invoice_count} invoice(s) exist for this lease. "
-            "Financial history must remain immutable."
-        )
-    
-    # Check for cashflows
-    cashflow_count = await db.execute(
-        select(func.count(CashFlow.id)).where(
-            and_(
-                CashFlow.lease_id == lease.id,
-                CashFlow.deleted_at.is_(None)
-            )
-        )
-    )
-    cashflow_count = cashflow_count.scalar() or 0
-    
-    if cashflow_count > 0:
-        raise LeaseNotEditableError(
-            f"Cannot edit lease: {cashflow_count} cashflow(s) exist for this lease. "
-            "Financial history must remain immutable."
-        )
+    await assert_no_financial_activity(db, lease.id)
 
 
 class LeaseService:
@@ -483,41 +492,8 @@ class LeaseService:
                 detail=f"Cannot submit lease with status '{current_status}'. Only draft leases can be submitted. {tenant_info}"
             )
         
-        # Check 3: no invoices must exist
-        invoice_count = await db.execute(
-            select(func.count(Invoice.id)).where(
-                and_(
-                    Invoice.lease_id == lease.id,
-                    Invoice.deleted_at.is_(None)
-                )
-            )
-        )
-        invoice_count = invoice_count.scalar() or 0
-        
-        if invoice_count > 0:
-            raise HTTPException(
-                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Cannot submit lease: {invoice_count} invoice(s) exist for this lease. "
-                       f"Leases with invoices cannot be submitted. {tenant_info}"
-            )
-        
-        # Check 4: no cashflows must exist
-        cashflow_count = await db.execute(
-            select(func.count(CashFlow.id)).where(
-                and_(
-                    CashFlow.lease_id == lease.id,
-                    CashFlow.deleted_at.is_(None)
-                )
-            )
-        )
-        cashflow_count = cashflow_count.scalar() or 0
-        
-        if cashflow_count > 0:
-            raise HTTPException(
-                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Cannot submit lease: {cashflow_count} cashflow(s) exist for this lease. "
-                       f"Leases with cashflows cannot be submitted. {tenant_info}"
-            )
+        # Check 3 & 4: no invoices or cashflows must exist
+        await assert_no_financial_activity(db, lease.id)
         
         # All conditions met - submit the lease
         lease.submitted_at = datetime.now()
