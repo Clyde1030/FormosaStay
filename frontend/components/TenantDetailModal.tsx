@@ -536,17 +536,19 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                         <CreditCard size={20} className="text-brand-500"/> Current Contract
                                     </h3>
                                     <div className="flex gap-2">
-                                        {/* Draft contract actions - Print and Submit */}
+                                        {/* Print Contract button - available for all contract statuses */}
+                                        {tenant.currentContract && (
+                                            <button 
+                                                onClick={handlePrint} 
+                                                className="px-3 py-1.5 text-sm bg-slate-50 text-slate-700 rounded-lg hover:bg-slate-100 font-medium flex items-center gap-1"
+                                                title="Print Contract"
+                                            >
+                                                <Printer size={14}/> Print Contract
+                                            </button>
+                                        )}
+                                        {/* Draft contract actions - Submit */}
                                         {tenant.currentContract?.status === ContractStatus.DRAFT && !tenant.currentContract?.submitted_at && (
                                             <>
-                                                {/* Print Contract button - available for draft contracts */}
-                                                <button 
-                                                    onClick={handlePrint} 
-                                                    className="px-3 py-1.5 text-sm bg-slate-50 text-slate-700 rounded-lg hover:bg-slate-100 font-medium flex items-center gap-1"
-                                                    title="Print Contract"
-                                                >
-                                                    <Printer size={14}/> Print Contract
-                                                </button>
                                                 {/* Submit Contract button - only show for draft leases that haven't been submitted */}
                                                 <button 
                                                     onClick={handleSubmitContract}
@@ -578,9 +580,6 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
                                         {/* Active lease actions */}
                                         {tenant.currentContract?.status === ContractStatus.ACTIVE && (
                                             <>
-                                                <button onClick={handlePrint} className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Print Contract">
-                                                    <Printer size={18} />
-                                                </button>
                                                 <button 
                                                     onClick={() => setView('amend')}
                                                     className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-1"

@@ -72,6 +72,7 @@ Frontend will run on: **http://localhost:3000**
 - `POST /leases/` - Create lease (with tenant creation/update)
 - `POST /leases/{id}/renew` - Renew lease
 - `POST /leases/{id}/terminate` - Terminate lease (with electricity bill calculation)
+- `GET /leases/{id}/contract` - Get contract data for PDF generation (uses `v_contract` view)
 
 #### Dashboard
 - `GET /dashboard/stats` - Get dashboard statistics (total rooms, occupied, occupancy rate, overdue totals)
@@ -116,6 +117,7 @@ The following views are defined in the database:
 4. **v_room_electricity_history** - Electricity usage and billing history
 5. **v_room_dashboard_summary** - Comprehensive room dashboard data
 6. **v_user_role** - User information with role assignments
+7. **v_contract** - Contract data formatted for PDF generation
 
 ### View Details
 
@@ -412,6 +414,65 @@ Frontend displays manager information
 
 ---
 
+#### 7. v_contract
+
+**Purpose**: Provides comprehensive contract data formatted specifically for PDF generation, including ROC (Republic of China) date formatting, contract duration calculations, and formatted asset descriptions.
+
+**Key Features**:
+- Pre-formatted room names in Chinese format (e.g., "地址X樓Y室")
+- Contract duration calculation in Chinese format (e.g., "1年6個月")
+- ROC date formatting (民國年 format) for lease dates
+- Formatted asset descriptions (e.g., "鑰匙1支 磁扣1個 遙控器1個")
+- Includes landlord and tenant information
+- Links to electricity rates for the lease period
+- Only includes active, non-terminated leases
+
+**Columns**:
+- Room info: `room_id`, `floor_no`, `room_no`, `room_full_name`, `building_address`
+- Lease info: `lease_id`, `start_date`, `end_date`, `monthly_rent`, `deposit`, `payment_term`, `pay_rent_on`, `vehicle_plate`, `assets`, `lease_assets_description`
+- Formatted dates: `lease_start_date_roc`, `lease_end_date_roc`, `contract_date`, `contract_date_roc`
+- Calculated: `contract_duration` (e.g., "1年6個月")
+- Tenant info: `tenant_id`, `tenant_name`, `tenant_phone`, `personal_id`, `birthday`, `home_address`
+- Emergency contact: `emergency_contact_name`, `emergency_contact_phone`
+- Landlord info: `landlord_name`, `landlord_address`
+- Electricity: `rate_per_kwh`
+
+**Backend Usage**:
+- **Endpoint**: `GET /leases/{lease_id}/contract`
+- **File**: `backend/app/routers/leases.py`
+- Used specifically for contract PDF generation
+- Queries the view: `SELECT * FROM v_contract WHERE lease_id = :lease_id LIMIT 1`
+
+**Frontend Connection**:
+- **Service**: `frontend/services/contractPdfService.ts` (if exists)
+- **Function**: Contract PDF generation
+- **Components**:
+  - Contract generation modals
+  - PDF preview/download functionality
+
+**Data Flow**:
+```
+Frontend: Contract PDF generation request
+  ↓
+apiClient.get(`/leases/${leaseId}/contract`)
+  ↓
+Backend: GET /leases/{lease_id}/contract (leases.py)
+  ↓
+SQL: SELECT * FROM v_contract WHERE lease_id = :lease_id
+  ↓
+Response with formatted contract data
+  ↓
+Frontend generates PDF with pre-formatted data
+```
+
+**Special Features**:
+- ROC date conversion: Automatically converts Gregorian dates to ROC format (民國年)
+- Asset formatting: Converts JSONB asset array to Chinese description string
+- Duration calculation: Calculates contract duration in years and months
+- Room name formatting: Combines building address, floor, and room number in Chinese format
+
+---
+
 ### View Creation and Migration
 
 Views are created through Alembic migrations:
@@ -424,6 +485,7 @@ Views are created through Alembic migrations:
   - `0002_v_room_electricity_history.sql`
   - `0002_v_room_dashboard_summary.sql`
   - `0002_v_user_role.sql`
+  - `0002_v_contracts.sql`
 
 To recreate views after database reset:
 ```bash
@@ -768,6 +830,21 @@ Frontend Service: amendContract() (frontend/services/propertyService.ts)
 Frontend Component: TenantDetailModal.tsx or contract detail view
   ↓
 UI: "Amend Contract" button → Form → "Create Amendment" button
+```
+
+#### Get Contract for PDF
+```
+Database: v_contract (view)
+  ↓
+Router: GET /leases/{lease_id}/contract (backend/app/routers/leases.py)
+  ↓
+Backend Service: (Direct view query)
+  ↓
+Frontend Service: (Contract PDF generation service)
+  ↓
+Frontend Component: Contract PDF generation components
+  ↓
+UI: "Generate Contract PDF" button → PDF download/preview
 ```
 
 ---

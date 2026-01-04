@@ -26,6 +26,7 @@ def upgrade() -> None:
     op.execute("DROP VIEW IF EXISTS v_room_electricity_history CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_payment_history CASCADE")
     op.execute("DROP VIEW IF EXISTS v_tenant_complete CASCADE")
+    op.execute("DROP VIEW IF EXISTS v_contracts CASCADE")
     op.execute("DROP VIEW IF EXISTS v_user_role CASCADE")
 
     # Create all views
@@ -34,6 +35,7 @@ def upgrade() -> None:
     execute_sql_file(op, "0002_v_room_electricity_history.sql")
     execute_sql_file(op, "0002_v_room_payment_history.sql")
     execute_sql_file(op, "0002_v_tenant_complete.sql")
+    execute_sql_file(op, "0002_v_contracts.sql")
     execute_sql_file(op, "0002_v_user_role.sql")
 
 
@@ -45,5 +47,6 @@ def downgrade() -> None:
     op.execute("DROP VIEW IF EXISTS v_room_electricity_history CASCADE")
     op.execute("DROP VIEW IF EXISTS v_room_payment_history CASCADE")
     op.execute("DROP VIEW IF EXISTS v_tenant_complete CASCADE")
+    op.execute("DROP VIEW IF EXISTS v_contracts CASCADE")
     op.execute("DROP VIEW IF EXISTS v_user_role CASCADE")
 

@@ -34,11 +34,22 @@ Tech Stack: React (Frontend), Dockerized Postgres Database(Backend/Database/Auth
 ## 🏗️ Technical Architecture
 
 ### Database Schema (PostgreSQL)
-The system uses a relational structure optimized for Taiwan’s rental laws. Key tables include:
+The system uses a relational structure optimized for Taiwan's rental laws. Key tables include:
 - tenant: Personal details and ID verification.
 - lease: Contractual terms and proration data.
 - payment: Transaction records for rent and utilities.
 - cash_flow: Comprehensive ledger for property expenses and income.
+
+**Database Views**: The system uses PostgreSQL views to provide optimized, pre-computed data:
+- `v_tenant_complete`: Complete tenant information with active leases
+- `v_room_current_tenant`: Current tenant(s) for each room
+- `v_room_payment_history`: Payment/invoice history for rooms
+- `v_room_electricity_history`: Electricity usage and billing history
+- `v_room_dashboard_summary`: Comprehensive room dashboard data
+- `v_user_role`: User information with role assignments
+- `v_contract`: Contract data formatted for PDF generation
+
+For detailed view documentation, see [FRONTEND_BACKEND_INTEGRATION.md](./FRONTEND_BACKEND_INTEGRATION.md#-database-views).
 
 ### Current Implementation (Postgres)
 - Project URL: https://huodcetrwapdedipjehg.supabase.co
@@ -59,6 +70,14 @@ The system uses a relational structure optimized for Taiwan’s rental laws. Key
 ## 🛠️ Getting Started
 1. Database Setup
 Execute the SQL schema found in /database/schema.sql within your Supabase SQL Editor. This will initialize all tables, enums, and the enforce_room_building_match trigger.
+
+**Important**: Run Alembic migrations to create database views:
+```bash
+cd backend
+alembic upgrade head
+```
+
+This will create all necessary database views that provide optimized data access for the application.
 
 2. Environment Variables
 Create a .env file in the root directory:
