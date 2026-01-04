@@ -2,8 +2,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 from typing import Optional, List
 from datetime import date, timedelta
+import json
 
 from app.db.session import get_db
 from app.services.lease_service import LeaseService, determine_lease_status
@@ -65,6 +67,7 @@ def build_lease_response(lease: Lease) -> LeaseResponse:
     }
     return LeaseResponse(**lease_dict)
 
+
 @router.get("/", response_model=List[LeaseResponse])
 async def list_leases(
     tenant_id: Optional[int] = Query(None, description="Filter by tenant ID"),
@@ -85,6 +88,7 @@ async def list_leases(
     )
     return [build_lease_response(lease) for lease in leases]
 
+
 @router.get("/{lease_id}", response_model=LeaseResponse)
 async def get_lease(
     lease_id: int,
@@ -101,6 +105,8 @@ async def get_lease(
             detail=f"Lease with id {lease_id} not found"
         )
     return build_lease_response(lease)
+
+
 @router.post("/", response_model=LeaseResponse, status_code=http_status.HTTP_201_CREATED)
 async def create_lease(
     lease_data: LeaseCreate,
@@ -290,3 +296,56 @@ async def calculate_proration(
         days_used=days_used,
         days_in_month=days_in_month
     )
+
+
+@router.get("/{lease_id}/contract")
+async def get_contract_for_pdf(
+    lease_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get contract data from v_contract view for PDF generation.
+    
+    This endpoint fetches contract data from the v_contract view which provides
+    all necessary information pre-formatted for contract PDF generation.
+    Returns data optimized for the contract PDF service.
+    """
+    try:
+        result = await db.execute(
+            text("""
+                SELECT * FROM v_contract 
+                WHERE lease_id = :lease_id
+                LIMIT 1
+            """),
+            {"lease_id": lease_id}
+        )
+        row = result.mappings().first()
+        
+        if not row:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail=f"Contract with lease_id {lease_id} not found in v_contract view. The lease may be draft or not active."
+            )
+        
+        contract_dict = dict(row)
+        
+        # Parse JSONB fields if needed
+        if contract_dict.get('assets'):
+            if isinstance(contract_dict['assets'], str):
+                try:
+                    contract_dict['assets'] = json.loads(contract_dict['assets'])
+                except json.JSONDecodeError:
+                    contract_dict['assets'] = []
+        else:
+            contract_dict['assets'] = []
+        
+        return contract_dict
+    except HTTPException:
+        raise
+    except Exception as e:
+        if "does not exist" in str(e) or "relation" in str(e).lower():
+            raise HTTPException(
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="SQL view v_contract not found. Please run the migration to create the view."
+            )
+        raise

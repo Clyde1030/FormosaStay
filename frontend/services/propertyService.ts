@@ -974,3 +974,13 @@ export const getManager = async (): Promise<{ name: string | null; phone: string
         return { name: null, phone: null };
     }
 };
+
+export const getContractForPDF = async (leaseId: number): Promise<any> => {
+    try {
+        const data = await apiClient.get<any>(`/leases/${leaseId}/contract`);
+        return data;
+    } catch (error) {
+        console.error('Error fetching contract for PDF:', error);
+        throw error;
+    }
+};

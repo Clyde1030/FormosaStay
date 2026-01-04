@@ -271,12 +271,12 @@ const TenantDetailModal: React.FC<Props> = ({ tenant, onClose }) => {
     };
 
     const handlePrint = async () => {
-        if (!tenant.currentContract) {
+        if (!tenant.currentContract?.id) {
             alert('Cannot generate contract: No valid contract information');
             return;
         }
         try {
-            await generateContractPDF(tenant);
+            await generateContractPDF(tenant.currentContract.id);
         } catch (error) {
             console.error('Error generating PDF:', error);
             alert(UILabels.pdfGenerationError.en);

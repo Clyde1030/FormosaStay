@@ -1,72 +1,85 @@
 import html2pdf from 'html2pdf.js';
-import { TenantWithContract, UILabels } from '../types';
-import { getManager } from './propertyService';
+import { TenantWithContract, UILabels, PaymentFrequencyLabels, PaymentFrequency } from '../types';
+import { getManager, getContractForPDF } from './propertyService';
 
-// Convert Gregorian date to ROC (Republic of China) calendar format
-const toROCDate = (dateString: string): { year: number; month: number; day: number } => {
-    const date = new Date(dateString);
-    const rocYear = date.getFullYear() - 1911; // ROC calendar starts from 1911
-    return {
-        year: rocYear,
-        month: date.getMonth() + 1,
-        day: date.getDate()
-    };
-};
+// Contract data structure from v_contract view
+interface ContractViewData {
+    room_id: number;
+    lease_id: number;
+    tenant_id: number;
+    room_full_name: string;
+    contract_duration: string;
+    lease_start_date_roc: string;
+    lease_end_date_roc: string;
+    start_date: string;
+    end_date: string;
+    monthly_rent: number;
+    deposit: number;
+    payment_term: string;
+    pay_rent_on: number;
+    vehicle_plate?: string | null;
+    assets: any[] | null;
+    lease_assets_description?: string | null;
+    rate_per_kwh?: number | null;
+    landlord_name?: string | null;
+    landlord_address?: string | null;
+    tenant_name: string;
+    tenant_phone: string;
+    personal_id: string;
+    birthday: string;
+    home_address: string;
+    emergency_contact_name?: string | null;
+    emergency_contact_phone?: string | null;
+    contract_date?: string | null;
+    contract_date_roc?: string | null;
+    floor_no: number;
+    room_no: string;
+    building_address?: string | null;
+}
 
-// Format date in ROC format: 民國YYY年MM月DD日
-const formatROCDate = (dateString: string): string => {
-    const { year, month, day } = toROCDate(dateString);
-    return `民國${year}年${month}月${day}日`;
-};
-
-// Calculate rental period in years and months
-const calculateRentalPeriod = (startDate: string, endDate: string): string => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = end.getTime() - start.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const years = Math.floor(diffDays / 365);
-    const months = Math.floor((diffDays % 365) / 30);
-    
-    if (years > 0 && months > 0) {
-        return `${years}年${months}個月`;
-    } else if (years > 0) {
-        return `${years}年`;
-    } else {
-        return `${months}個月`;
+// Parse ROC date string (e.g., "113年1月15日") to extract date components
+// Used only as fallback if contract_date_roc is not available from view
+const parseROCDateString = (rocDateString: string): { year: number; month: number; day: number } | null => {
+    // Handle both formats: "113年1月15日" and "民國113年1月15日"
+    const normalized = rocDateString.replace('民國', '').trim();
+    const match = normalized.match(/(\d+)年(\d+)月(\d+)日/);
+    if (match) {
+        return {
+            year: parseInt(match[1], 10),
+            month: parseInt(match[2], 10),
+            day: parseInt(match[3], 10)
+        };
     }
+    return null;
 };
 
-// Get asset counts from itemsIssued array
-// Handles both English enum values ('key', 'fob', 'controller') and legacy Chinese values
-const getAssetCounts = (itemsIssued: any[]): { keys: number; cards: number; remotes: number } => {
+// Get asset counts from v_contract view assets JSONB array
+const getAssetCountsFromView = (assets: any[] | null): { keys: number; cards: number; remotes: number } => {
+    if (!assets || !Array.isArray(assets)) {
+        return { keys: 1, cards: 1, remotes: 0 };
+    }
+    
     let keys = 0;
     let cards = 0;
     let remotes = 0;
     
-    if (!itemsIssued || !Array.isArray(itemsIssued)) {
-        return { keys: 1, cards: 1, remotes: 0 };
-    }
-    
-    itemsIssued.forEach(item => {
-        const itemText = typeof item === 'object' && item !== null && 'type' in item
+    assets.forEach(item => {
+        const itemType = typeof item === 'object' && item !== null && 'type' in item
             ? item.type
             : String(item);
         const quantity = typeof item === 'object' && item !== null && 'quantity' in item
             ? item.quantity || 1
             : 1;
         
-        // Check for English enum values first (new format)
-        if (itemText === 'key' || itemText.includes('鑰匙') || itemText.includes('鑰')) {
+        if (itemType === 'key') {
             keys += quantity;
-        } else if (itemText === 'fob' || itemText.includes('磁扣') || itemText.includes('扣')) {
+        } else if (itemType === 'fob') {
             cards += quantity;
-        } else if (itemText === 'controller' || itemText.includes('遙控器') || itemText.includes('遙控')) {
+        } else if (itemType === 'controller' || itemType === 'remote') {
             remotes += quantity;
         }
     });
     
-    // Default to 1 if nothing specified
     return {
         keys: keys || 1,
         cards: cards || 1,
@@ -74,29 +87,55 @@ const getAssetCounts = (itemsIssued: any[]): { keys: number; cards: number; remo
     };
 };
 
-// Create HTML template for the contract
-const createContractHTML = (tenant: TenantWithContract, landlordInfo: { name: string | null; address: string | null }, managerInfo: { name: string | null; phone: string | null }): string => {
-    const contract = tenant.currentContract;
-    const room = tenant.room;
-    const building = tenant.building;
+
+// Create HTML template for the contract from v_contract view data
+const createContractHTMLFromView = (contractData: ContractViewData, managerInfo: { name: string | null; phone: string | null }): string => {
+    const propertyAddress = contractData.room_full_name;
+    const rentalPeriod = contractData.contract_duration;
+    const startROCDate = contractData.lease_start_date_roc.startsWith('民國') 
+        ? contractData.lease_start_date_roc 
+        : `民國${contractData.lease_start_date_roc}`;
+    const endROCDate = contractData.lease_end_date_roc.startsWith('民國') 
+        ? contractData.lease_end_date_roc 
+        : `民國${contractData.lease_end_date_roc}`;
     
-    if (!contract) {
-        throw new Error('Contract information is missing');
-    }
-    if (!room) {
-        throw new Error('Room information is missing');
-    }
-    if (!building) {
-        throw new Error('Building information is missing');
+    // Get contract date - use pre-formatted ROC date from view
+    let contractDate: { year: number; month: number; day: number };
+    // Try contract_date_roc first, then fallback to lease_start_date_roc
+    const rocDateString = contractData.contract_date_roc || contractData.lease_start_date_roc;
+    if (rocDateString) {
+        // Parse the ROC date string from view (format: "113年1月15日")
+        const parsed = parseROCDateString(rocDateString);
+        if (parsed) {
+            contractDate = parsed;
+        } else {
+            // Fallback if parsing fails - use start_date and calculate ROC manually
+            const today = new Date();
+            contractDate = {
+                year: today.getFullYear() - 1911,
+                month: today.getMonth() + 1,
+                day: today.getDate()
+            };
+        }
+    } else {
+        // Final fallback to today's date (should rarely happen)
+        const today = new Date();
+        contractDate = {
+            year: today.getFullYear() - 1911,
+            month: today.getMonth() + 1,
+            day: today.getDate()
+        };
     }
     
-    const propertyAddress = `${building.address || ''}${room.floor_no || ''}樓${room.room_no || ''}室`.trim();
-    const rentalPeriod = calculateRentalPeriod(contract.startDate, contract.endDate);
-    const startROCDate = formatROCDate(contract.startDate);
-    const endROCDate = formatROCDate(contract.endDate);
-    const contractDate = toROCDate(contract.startDate);
-    const tenantName = `${tenant.last_name || ''}${tenant.first_name || ''}`;
-    const assets = getAssetCounts(contract.itemsIssued || []);
+    const tenantName = contractData.tenant_name;
+    const assets = getAssetCountsFromView(contractData.assets);
+    const electricityRate = contractData.rate_per_kwh || 5.5;
+    const summerRate = 6.0;
+    
+    // Map payment_term from English (from view) to Chinese
+    // payment_term can be: 'monthly', 'seasonal', 'semi-annual', 'annual'
+    // These match the PaymentFrequency enum values
+    const paymentTermChinese = PaymentFrequencyLabels[contractData.payment_term as PaymentFrequency] || '月繳';
     
     return `
 <!DOCTYPE html>
@@ -185,11 +224,11 @@ const createContractHTML = (tenant: TenantWithContract, landlordInfo: { name: st
                 租賃期間：${rentalPeriod}<br>
                 起租日期：${startROCDate}<br>
                 終止日期：${endROCDate}<br><br>
-                1. 租金：每個月新台幣${contract.rentAmount}元 (含水費)*<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;付押金${contract.depositAmount || 0}，租金${contract.rentAmount}，租金月交<br>
-                2. 押金：新台幣${contract.depositAmount || 0}元整<br>
+                1. 租金：每個月新台幣${contractData.monthly_rent}元 (含水費)*<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;付押金${contractData.deposit || 0}，租金${contractData.monthly_rent}，租金${paymentTermChinese}<br>
+                2. 押金：新台幣${contractData.deposit || 0}元整<br>
                 3. 不提供報稅<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;交付：每月交付*<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;交付：${paymentTermChinese}*<br>
                 &nbsp;&nbsp;&nbsp;&nbsp;附鑰匙：${assets.keys}<br>
                 &nbsp;&nbsp;&nbsp;&nbsp;磁扣：${assets.cards}<br>
                 &nbsp;&nbsp;&nbsp;&nbsp;遙控器：${assets.remotes}
@@ -200,7 +239,7 @@ const createContractHTML = (tenant: TenantWithContract, landlordInfo: { name: st
             <div class="section-title">三、水電費</div>
             <div class="section-content">
                 1. 電費：各房間電費以獨立電表計算<br>
-                2. 電費：每度以5.5元計（依台電調整，夏季6元計*）
+                2. 電費：每度以${electricityRate}元計（依台電調整，夏季${summerRate}元計*）
             </div>
         </div>
         
@@ -255,12 +294,12 @@ const createContractHTML = (tenant: TenantWithContract, landlordInfo: { name: st
         
         <div class="party-section">
             <div class="party-title">甲方出租人</div>
-            <div class="landlord-seal">${landlordInfo.name}</div>
+            <div class="landlord-seal">${contractData.landlord_name || ''}</div>
             <div class="party-info">
-                戶籍地址：${landlordInfo.address}<br>
+                戶籍地址：${contractData.landlord_address || ''}<br>
                 身份証字號：<br>
-                電話：${managerInfo.phone}<br>
-                管理員：${managerInfo.name}
+                電話：${managerInfo.phone || ''}<br>
+                管理員：${managerInfo.name || ''}
             </div>
         </div>
         
@@ -268,12 +307,12 @@ const createContractHTML = (tenant: TenantWithContract, landlordInfo: { name: st
             <div class="party-title">乙方承租人</div>
             <div class="party-info">
                 姓名：${tenantName}<br>
-                車牌號碼：${contract.vehicle_plate || '**'}<br>
-                戶籍地址：${tenant.address || ''}<br>
-                身份証字號：${tenant.personal_id || ''}<br>
-                手機號碼：${tenant.phone || ''}<br>
-                生日：${tenant.birthday || ''}<br>
-                連絡電話：${tenant.phone || ''}
+                車牌號碼：${contractData.vehicle_plate || '**'}<br>
+                戶籍地址：${contractData.home_address || ''}<br>
+                身份証字號：${contractData.personal_id || ''}<br>
+                手機號碼：${contractData.tenant_phone || ''}<br>
+                生日：${contractData.birthday || ''}<br>
+                連絡電話：${contractData.tenant_phone || ''}
             </div>
         </div>
         
@@ -286,52 +325,98 @@ const createContractHTML = (tenant: TenantWithContract, landlordInfo: { name: st
     `;
 };
 
-export const generateContractPDF = async (tenant: TenantWithContract): Promise<void> => {
-    // Validate required data
-    if (!tenant.currentContract) {
-        console.error('Missing contract data:', tenant);
-        alert('Cannot generate contract: No contract information available');
-        return;
-    }
-    if (!tenant.room) {
-        console.error('Missing room data:', tenant);
-        alert('Cannot generate contract: No room information available');
-        return;
-    }
-    if (!tenant.building) {
-        console.error('Missing building data:', tenant);
-        alert('Cannot generate contract: No building information available');
-        return;
-    }
-    if (!tenant.building.address) {
-        console.warn('Building address is missing, contract may have incomplete address information');
-    }
-
+/**
+ * Generate contract PDF using data from v_contract view.
+ * This is the new implementation that uses v_contract view instead of TenantWithContract.
+ * 
+ * @param leaseId - The lease ID to fetch contract data from v_contract view
+ */
+export const generateContractPDF = async (leaseId: number): Promise<void> => {
     try {
-        // Fetch landlord and manager information
-        const landlordInfo = {
-            name: tenant.building?.landlord_name || null,
-            address: tenant.building?.landlord_address || null
-        };
+        // Fetch contract data from v_contract view
+        const contractData = await getContractForPDF(leaseId);
         
+        // Validate required data
+        if (!contractData) {
+            console.error('Missing contract data for lease_id:', leaseId);
+            alert('Cannot generate contract: No contract information available');
+            return;
+        }
+        
+        if (!contractData.room_full_name) {
+            console.error('Missing room information:', contractData);
+            alert('Cannot generate contract: No room information available');
+            return;
+        }
+        
+        console.log('Contract data received:', contractData);
+        
+        // Fetch manager information
         const managerInfo = await getManager();
+        console.log('Manager info:', managerInfo);
+        
+        // Create HTML content
+        const htmlContent = createContractHTMLFromView(contractData, managerInfo);
+        console.log('HTML content length:', htmlContent.length);
         
         // Create a temporary container for the HTML
+        // html2pdf needs the content to be in the DOM
         const container = document.createElement('div');
+        container.id = 'contract-pdf-container';
+        // Position it off-screen but still accessible to html2canvas
+        // html2canvas can capture off-screen elements, but they need to be in the DOM
         container.style.position = 'absolute';
-        container.style.left = '-9999px';
-        container.innerHTML = createContractHTML(tenant, landlordInfo, managerInfo);
+        container.style.left = '-10000px';
+        container.style.top = '0';
+        container.style.width = '794px'; // A4 width in pixels (210mm at 96 DPI)
+        container.style.minHeight = '1123px'; // A4 height in pixels (297mm at 96 DPI)
+        container.style.backgroundColor = '#FFFFC8'; // Match the contract background
+        
+        // Parse the HTML and extract just the body content with styles
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        
+        // Get all styles from the head
+        const styles = Array.from(doc.head.querySelectorAll('style'))
+            .map(style => style.textContent)
+            .join('\n');
+        
+        // Get the body content (the contract-container div)
+        const bodyContent = doc.body.innerHTML;
+        
+        // Combine styles and content
+        container.innerHTML = `<style>${styles}</style>${bodyContent}`;
+        
         document.body.appendChild(container);
+
+        // Wait a bit for the DOM to render and fonts to load
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Debug: Check if container has content
+        const contractContainer = container.querySelector('.contract-container') as HTMLElement | null;
+        if (!contractContainer) {
+            console.error('Contract container not found in DOM');
+            console.log('Container HTML:', container.innerHTML.substring(0, 500));
+            alert('Error: Contract content not properly rendered. Please check console for details.');
+            document.body.removeChild(container);
+            return;
+        }
+        console.log('Contract container found, content length:', contractContainer.textContent?.length || 0);
 
         // Configure html2pdf options
         const options = {
             margin: 0,
-            filename: `${UILabels.contractFilenamePrefix.en}_${tenant.last_name || ''}${tenant.first_name || ''}_${new Date().getTime()}.pdf`,
+            filename: `${UILabels.contractFilenamePrefix.en}_${contractData.tenant_name}_${new Date().getTime()}.pdf`,
             image: { type: 'jpeg' as const, quality: 0.98 },
             html2canvas: { 
                 scale: 2,
                 useCORS: true,
-                letterRendering: true
+                letterRendering: true,
+                logging: true, // Enable logging for debugging
+                windowWidth: 794, // A4 width in pixels at 96 DPI
+                windowHeight: 1123, // A4 height in pixels at 96 DPI
+                allowTaint: true,
+                backgroundColor: '#FFFFC8' // Ensure background color is captured
             },
             jsPDF: { 
                 unit: 'mm', 
@@ -340,14 +425,41 @@ export const generateContractPDF = async (tenant: TenantWithContract): Promise<v
             }
         };
 
-        // Generate PDF
-        await html2pdf().set(options).from(container).save();
+        console.log('Starting PDF generation...');
+        
+        // Generate PDF from the contract container (we already verified it exists above)
+        const targetElement: HTMLElement = contractContainer || container;
+        console.log('Generating PDF from element:', targetElement.className);
+        
+        await html2pdf().set(options).from(targetElement).save();
+        
+        console.log('PDF generation completed');
 
         // Clean up
-        document.body.removeChild(container);
+        if (container.parentNode) {
+            document.body.removeChild(container);
+        }
     } catch (error) {
         console.error('Error generating PDF:', error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         alert(`${UILabels.pdfGenerationError.en}\n\nError: ${errorMessage}`);
     }
+};
+
+/**
+ * Generate contract PDF from TenantWithContract (legacy support).
+ * This function fetches the lease_id and uses the new v_contract based implementation.
+ * 
+ * @param tenant - TenantWithContract object (legacy parameter for backward compatibility)
+ * @deprecated Use generateContractPDF(leaseId) instead
+ */
+export const generateContractPDFFromTenant = async (tenant: TenantWithContract): Promise<void> => {
+    // For backward compatibility, extract lease_id and use the new implementation
+    if (!tenant.currentContract?.id) {
+        console.error('Missing contract data:', tenant);
+        alert('Cannot generate contract: No contract information available');
+        return;
+    }
+    
+    await generateContractPDF(tenant.currentContract.id);
 };

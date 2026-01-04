@@ -11,7 +11,6 @@ from app.models.tenant import Tenant
 from app.models.invoice import Invoice
 from app.models.cash_flow import CashFlow
 from app.schemas.lease import LeaseCreate, LeaseUpdate, LeaseRenew, LeaseTerminate, LeaseAmend
-from app.schemas.tenant import TenantCreate
 from app.services.electricity_service import ElectricityService
 from app.services.tenant_service import TenantService
 from app.exceptions import LeaseNotEditableError, LeaseAmendmentError
