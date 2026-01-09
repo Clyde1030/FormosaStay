@@ -23,6 +23,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop all tables and functions"""
+    # Drop triggers first
     op.execute("DROP TRIGGER IF EXISTS trg_lease_amendment_effective_date ON lease_amendment")
     op.execute("DROP TRIGGER IF EXISTS trg_lease_tenant_no_deleted_tenant ON lease_tenant")
     op.execute("DROP TRIGGER IF EXISTS trg_lease_validate_assets ON lease")
@@ -30,15 +31,8 @@ def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS trg_invoice_no_deleted_lease ON invoice")
     op.execute("DROP TRIGGER IF EXISTS trg_cf_lease_room_building ON cash_flow")
     op.execute("DROP TRIGGER IF EXISTS trg_cf_room_building ON cash_flow")
-    op.execute("DROP FUNCTION IF EXISTS soft_delete")
-    op.execute("DROP FUNCTION IF EXISTS validate_lease_assets")
-    op.execute("DROP FUNCTION IF EXISTS prevent_deleted_tenant")
-    op.execute("DROP FUNCTION IF EXISTS prevent_deleted_room")
-    op.execute("DROP FUNCTION IF EXISTS prevent_deleted_parent")
-    op.execute("DROP FUNCTION IF EXISTS check_amendment_effective_date")
-    op.execute("DROP FUNCTION IF EXISTS enforce_lease_room_building_match")
-    op.execute("DROP FUNCTION IF EXISTS enforce_room_building_match")
     
+    # Drop tables in reverse dependency order
     op.drop_table('cash_flow_attachment')
     op.drop_index('idx_cf_lease', table_name='cash_flow')
     op.drop_index('idx_cf_account', table_name='cash_flow')
@@ -53,13 +47,33 @@ def downgrade() -> None:
     op.drop_index('uq_invoice_period_active', table_name='invoice')
     op.drop_index('idx_invoice_lease', table_name='invoice')
     op.drop_table('invoice_adjustment')
+    op.drop_table('invoice_discount')
     op.drop_table('invoice')
     op.drop_index('uq_primary_tenant', table_name='lease_tenant')
     op.drop_table('lease_tenant')
     op.drop_index('uq_rent_change_effective', table_name='lease_amendment')
     op.drop_table('lease_amendment')
-
     op.drop_table('lease')
+    op.drop_table('tenant_emergency_contact')
+    op.drop_table('tenant')
+    op.drop_table('room')
+    op.drop_table('building')
+    op.drop_table('employee')
+    op.drop_table('user_role')
+    op.drop_table('user_account')
+    op.drop_table('role')
+    
+    # Drop functions
+    op.execute("DROP FUNCTION IF EXISTS soft_delete")
+    op.execute("DROP FUNCTION IF EXISTS validate_lease_assets")
+    op.execute("DROP FUNCTION IF EXISTS prevent_deleted_tenant")
+    op.execute("DROP FUNCTION IF EXISTS prevent_deleted_room")
+    op.execute("DROP FUNCTION IF EXISTS prevent_deleted_parent")
+    op.execute("DROP FUNCTION IF EXISTS check_amendment_effective_date")
+    op.execute("DROP FUNCTION IF EXISTS enforce_lease_room_building_match")
+    op.execute("DROP FUNCTION IF EXISTS enforce_room_building_match")
+    
+    # Drop types
     op.execute("DROP TYPE IF EXISTS payment_method_type")
     op.execute("DROP TYPE IF EXISTS cash_account_type")
     op.execute("DROP TYPE IF EXISTS cash_direction_type")
@@ -70,14 +84,5 @@ def downgrade() -> None:
     op.execute("DROP TYPE IF EXISTS lease_amendment_type")
     op.execute("DROP TYPE IF EXISTS discount_type")
     op.execute("DROP TYPE IF EXISTS adjustment_source_type")
-    
-    op.drop_table('tenant_emergency_contact')
-    op.drop_table('tenant')
     op.execute("DROP TYPE IF EXISTS gender_type")
-    op.drop_table('room')
-    op.drop_table('building')
-    op.drop_table('employee')
-    op.drop_table('user_role')
-    op.drop_table('user_account')
-    op.drop_table('role')
 

@@ -1,33 +1,59 @@
 -- ============================================================
--- FormosaStay Schema
+-- FormosaStay Schema (Clean Version)
 -- ============================================================
--- The schema is written in PostgreSQL 16. Script is written in
--- DDL language as a reference for alembic migrations and 
--- sqlalchemy models.
+-- PostgreSQL 16
+-- Reference DDL for Alembic migrations & SQLAlchemy models
+--
+-- Core principles:
+-- - Lease defines LEGAL terms
+-- - Lease amendments define LEGAL changes only
+-- - Invoice defines BILLING
+-- - Discounts live at INVOICE level
+-- - Adjustments are penalties / corrections
+-- - Cash flow reflects actual money movement
 -- ============================================================
 
 -- ############################################################
 -- ### ENUM Types ###
 -- ############################################################
+
 CREATE TYPE gender_type AS ENUM ('M','F','O');
+
+-- How rent is contractually billed
 CREATE TYPE payment_term_type AS ENUM ('annual','semi-annual','seasonal','monthly');
-CREATE TYPE lease_amendment_type AS ENUM ('rent_change', 'discount', 'other');
-CREATE TYPE discount_type AS ENUM ('free_months','fixed_amount','percentage');
+
+-- ONLY legal contract changes
+CREATE TYPE lease_amendment_type AS ENUM ('rent_change','other');
+
+-- Discount classification (billing only)
+CREATE TYPE discount_type AS ENUM (
+    'first_month_free',
+    'free_months',
+    'fixed_amount',
+    'percentage'
+);
+
 CREATE TYPE tenant_role_type AS ENUM ('primary','secondary');
+
 CREATE TYPE payment_status AS ENUM ('unmatured','overdue','paid','partial','uncollectable','returned','canceled');
+
 CREATE TYPE invoice_category AS ENUM ('rent','electricity', 'penalty', 'deposit');
-CREATE TYPE adjustment_source_type AS ENUM ('promotion','manual','penalty');
+
+CREATE TYPE adjustment_source_type AS ENUM ('manual','penalty');
+
 CREATE TYPE cash_direction_type AS ENUM ('in','out','transfer');
+
 CREATE TYPE cash_account_type AS ENUM ('bank', 'cash', 'clearing', 'deposit');
+
 CREATE TYPE payment_method_type AS ENUM ('cash','bank','LINE_Pay','other');
 
  
 
 -- ############################################################
--- ### Tables ###
+-- ### Security & Roles ###
 -- ############################################################
 
--- Security & Roles
+
 CREATE TABLE user_account (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     email TEXT NOT NULL,
@@ -201,25 +227,22 @@ CREATE TABLE lease (
         FOREIGN KEY (updated_by) REFERENCES user_account(id)    
 );
 
--- lease_amendment does NOT modify lease values directly
--- lease to lease_amendment is one-to-many relationship
--- Consider labeling each amendment for each lease with numbers starting from 1
--- amendment_no
+
+-- ############################################################
+-- ### Lease Amendment ###
+-- ############################################################
+-- Lease to lease_amendment is one-to-many relationship
+-- Tracks LEGAL changes only but does NOT modify lease values directly
+-- Does NOT affect billing or invoices directly.
 CREATE TABLE lease_amendment (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     lease_id BIGINT NOT NULL,
     amendment_type lease_amendment_type NOT NULL,
     effective_date DATE NOT NULL,
 
-    -- Financial deltas (nullable depending on amendment_type)
+    -- Only for rent_change
     old_monthly_rent NUMERIC(10,2),
     new_monthly_rent NUMERIC(10,2),
-
-    -- DISCOUNT
-    discount_type discount_type,
-    discount_value NUMERIC(10,2),
-    applies_to_payment_term payment_term_type,
-    billing_cycle_months INTEGER,
 
     reason TEXT NOT NULL,
     created_by BIGINT NOT NULL,
@@ -243,15 +266,6 @@ CREATE TABLE lease_amendment (
                 AND new_monthly_rent IS NOT NULL
                 AND old_monthly_rent >= 0
                 AND new_monthly_rent >= 0
-            )
-        ),
-    
-    CONSTRAINT chk_discount_values
-        CHECK (
-            amendment_type <> 'discount'
-            OR (
-                discount_type IS NOT NULL
-                AND discount_value IS NOT NULL
             )
         )
 );
@@ -302,6 +316,31 @@ CREATE TABLE invoice (
         FOREIGN KEY (updated_by) REFERENCES user_account(id)
 );
 
+-- ############################################################
+-- ### Invoice Discount ###
+-- ############################################################
+-- Discounts are BILLING INCENTIVES.
+-- Never modify lease or invoice due_amount.
+
+CREATE TABLE invoice_discount (
+    id BIGINT GENERATED ALWAYS AS IDENTITY,
+    invoice_id BIGINT NOT NULL,
+    discount_type discount_type NOT NULL,
+    amount NUMERIC(10,2) NOT NULL,
+    reason TEXT,
+    source TEXT,
+    created_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ,
+
+    CONSTRAINT pk_invoice_discount PRIMARY KEY (id),
+    CONSTRAINT fk_discount_invoice
+        FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE CASCADE,
+    CONSTRAINT chk_discount_amount_positive
+        CHECK (amount > 0)
+);
+
+
 -- Invoice to Invoice Adjustment is one-to-many relationship
 -- Consider labeling each adjustment for each invoice with numbers starting from 1
 -- adjustment_no
@@ -313,6 +352,7 @@ CREATE TABLE invoice_adjustment (
     description TEXT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
     CONSTRAINT pk_invoice_adjustment PRIMARY KEY (id),
     CONSTRAINT fk_adj_invoice
         FOREIGN KEY (invoice_id) REFERENCES invoice(id) ON DELETE CASCADE
