@@ -1,149 +1,151 @@
 GOAL
-====
-Allow applying a rent discount during lease creation WITHOUT breaking existing
-lease status rules, immutability rules, or financial history integrity.
+Add backend functionality to support creating a new lease contract with invoice-level discounts
+(using invoice_discount), without modifying lease financial terms or creating lease amendments.
 
-Core principle:
-- Discounts are modeled as lease amendments, NOT direct rent mutations.
-- Active leases remain immutable unless through amendments.
-- Draft/pending flexibility is preserved.
-- No status rules are weakened.
+SCOPE
+- Backend only
+- PostgreSQL
+- Existing tables: lease, lease_tenant, invoice, invoice_discount
+- Discount applies at invoice level, not lease or amendment level
 
+BUSINESS RULES (DO NOT VIOLATE)
+1. lease.monthly_rent is the legal rent and MUST NOT be modified for discounts
+2. lease_amendment MUST NOT be created for promotional or billing discounts
+3. Discounts ONLY reduce invoice payable amount
+4. Discounts must be auditable, explicit, and reversible
+5. One lease can have multiple invoices; one invoice can have multiple discounts
 
-BACKGROUND
-==========
-- Lease.status is derived, not stored.
-- Lease.monthly_rent represents the BASE rent.
-- All rent changes after activation must go through LeaseAmendment.
-- Amendments already model auditability, effective dates, and rent history.
+SUPPORTED DISCOUNT SCENARIO (INITIAL)
+- Annual upfront payment
+- First month rent waived
+- Discount equals lease.monthly_rent
+- Discount applies to the first rent invoice only
 
-A discount at creation time is conceptually:
-- a scheduled rent amendment created together with the lease
-- NOT a modification of the lease itself
+--------------------------------------------------
+DATABASE WORK
+--------------------------------------------------
 
+1. Ensure invoice_discount table exists with the following minimum columns:
 
-BACKEND CHANGES
-===============
+invoice_discount
+- id BIGINT PK
+- invoice_id BIGINT FK -> invoice(id)
+- discount_type TEXT NOT NULL
+- amount NUMERIC(10,2) NOT NULL CHECK (amount >= 0)
+- reason TEXT NOT NULL
+- created_at TIMESTAMPTZ DEFAULT now()
+- deleted_at TIMESTAMPTZ
 
-1) Update LeaseCreate schema
-----------------------------
-Add OPTIONAL fields to LeaseCreate:
+2. Add FK constraint:
+invoice_discount.invoice_id REFERENCES invoice(id) ON DELETE CASCADE
 
-- discount_amount?: Decimal
-- discount_type, allowed values are ('free_months','fixed_amount','percentage') like we specified in our database
-- discount_reason?: string, corresponding to lease_amendment_type ('rent_change', 'discount', 'other') like our database
-- discount_effective_date?: date
+3. DO NOT add discount fields to lease or invoice tables
 
-Validation rules:
-- discount_amount > 0
-- discount_amount < monthly_rent
-- discount_effective_date >= start_date
-- if discount_amount is provided, discount_reason is required
-- if discount_effective_date is omitted, default to lease.start_date
+--------------------------------------------------
+API / SERVICE LOGIC
+--------------------------------------------------
 
+Create a new service function:
+create_discounted_lease_contract(input)
 
-2) Update create_lease()
-------------------------
-After:
-- Lease is created
-- db.flush() is called (lease.id exists)
+INPUT STRUCTURE (example)
+{
+  room_id,
+  tenants[],
+  start_date,
+  end_date,
+  monthly_rent,
+  deposit,
+  pay_rent_on,
+  payment_term,        // e.g. 'annual'
+  discount: {
+    type: 'first_month_free',
+    reason: 'Annual upfront payment incentive'
+  }
+}
 
-BUT BEFORE:
-- db.commit()
+--------------------------------------------------
+IMPLEMENTATION STEPS
+--------------------------------------------------
 
-Add logic:
+STEP 1: Create Lease
+- Insert into lease table normally
+- monthly_rent is the FULL legal rent
+- payment_term may be 'annual'
+- status remains draft or pending depending on existing logic
+- DO NOT calculate discounts here
 
-IF discount_amount is provided:
-- Create a LeaseAmendment record directly (do NOT call create_amendment())
-- keep the original lease_id, and the new lease amendment will amend the existing lease during the discounted lease is created.
-- amendment_type = "discount"
-- effective_date = discount_effective_date
-- old_monthly_rent = new_lease.monthly_rent
-- new_monthly_rent = new_lease.monthly_rent - discount_amount
-- reason = discount_reason
-- created_by = created_by
+STEP 2: Attach Tenants
+- Insert rows into lease_tenant
+- No discount logic involved
 
-IMPORTANT:
+STEP 3: Generate Initial Rent Invoice
+- Create ONE rent invoice for the full billing period
+- period_start = lease.start_date
+- period_end = lease.start_date + billing_term - 1 day
+- due_amount = monthly_rent × number_of_months
+- payment_status = 'unpaid' or equivalent
+
+STEP 4: Apply Discount (IF PROVIDED)
+- If input.discount exists:
+    - Calculate discount_amount
+        - For first_month_free:
+            discount_amount = lease.monthly_rent
+    - Insert into invoice_discount:
+        invoice_id = created invoice.id
+        discount_type = input.discount.type
+        amount = discount_amount
+        reason = input.discount.reason
+
+STEP 5: Derived Invoice Net Amount
+- Do NOT store net payable in invoice table
+- When querying invoice totals:
+    net_payable = invoice.due_amount - SUM(invoice_discount.amount)
+
+--------------------------------------------------
+QUERY / READ MODEL UPDATE
+--------------------------------------------------
+
+Update invoice read logic to include:
+- total_discount
+- net_payable
+
+Example SQL pattern:
+
+SELECT
+    i.*,
+    COALESCE(SUM(d.amount), 0) AS total_discount,
+    i.due_amount - COALESCE(SUM(d.amount), 0) AS net_payable
+FROM invoice i
+LEFT JOIN invoice_discount d
+    ON d.invoice_id = i.id
+    AND d.deleted_at IS NULL
+GROUP BY i.id;
+
+--------------------------------------------------
+GUARDS & VALIDATIONS
+--------------------------------------------------
+
+- Prevent discount.amount > invoice.due_amount
+- Prevent discounts on non-rent invoices (unless explicitly allowed later)
+- Prevent discount creation if invoice is already fully paid
+- Soft-delete discounts instead of hard delete
+
+--------------------------------------------------
+WHAT NOT TO DO
+--------------------------------------------------
+
 - DO NOT modify lease.monthly_rent
-- DO NOT bypass or weaken lease status logic
-- This is a controlled internal amendment allowed only during creation
+- DO NOT create lease_amendment for discounts
+- DO NOT store negative invoice lines
+- DO NOT hard-code discount logic into invoice table
 
+--------------------------------------------------
+EXPECTED OUTCOME
+--------------------------------------------------
 
-Add a comment explaining intent:
-
-"Amendments created during lease creation are allowed because the lease is not
-yet active and has no financial history. After activation, all rent changes
-MUST go through create_amendment()."
-
-
-3) Status & immutability rules (DO NOT CHANGE)
-----------------------------------------------
-DO NOT:
-- Modify determine_lease_status
-- Modify assert_lease_editable
-- Allow editing monthly_rent after submission
-- Allow amendments on non-active leases outside create_lease
-
-Active leases remain immutable.
-
-
-4) Invoice / rent resolution logic
-----------------------------------
-Ensure that invoice generation and rent calculation always resolve rent as:
-
-- Base lease.monthly_rent
-- PLUS the latest effective LeaseAmendment as of the invoice period
-
-Discounts must NOT be baked into the lease record or invoices directly unless
-already designed that way.
-
-
-FRONTEND CHANGES
-================
-
-5) Lease creation UI
---------------------
-Add an OPTIONAL "Apply Discount" section:
-
-- Discount amount
-- Effective date (default = lease start_date)
-- Reason (required if discount is applied)
-
-Rules:
-- Only shown during lease creation
-- Hidden for submit / renew / edit flows
-- Validate discount < monthly rent
-
-
-6) Lease detail display
-----------------------
-Display rent clearly as:
-
-- Base Rent
-- Active Discount(s) (from amendments)
-- Effective Rent
-
-Label discounts explicitly as:
-"Applied via amendment"
-
-This avoids accounting ambiguity.
-
-
-GUARDRAILS (CRITICAL)
-====================
-DO NOT:
-- Make active leases editable
-- Change lease status rules
-- Store discounted rent directly on Lease
-- Reuse create_amendment() inside create_lease
-- Introduce special cases that bypass amendments
-
-
-EXPECTED RESULT
-===============
-- Lease creation supports discounts cleanly
-- Status rules remain intact
-- Rent history remains auditable
-- Future discounts still require create_amendment()
-- No financial data integrity is compromised
-
+- Lease remains legally correct
+- Invoice reflects billed amount
+- invoice_discount explains why tenant pays less
+- Accounting and audit trail are preserved
+- System supports future discount types without schema changes
